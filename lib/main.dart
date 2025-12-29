@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'src/core/theme/app_theme.dart';
-import 'src/features/auth/presentation/pages/login_page.dart';
+import 'src/features/auth/presentation/login_page.dart';
 
 void main() {
   runApp(const MedShakthiApp());
