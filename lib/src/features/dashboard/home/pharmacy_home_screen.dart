@@ -70,7 +70,7 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
                 30,
               ), // Fully rounded pills are trendy
               border: Border.all(
-                color: Colors.grey.withOpacity(0.1),
+                color: Colors.grey.withValues(alpha: 0.1),
               ), // Subtle border
             ),
             child: const Row(
@@ -133,7 +133,7 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
           borderRadius: BorderRadius.circular(14), // Squircle shape
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
+              color: Colors.grey.withValues(alpha: 0.1),
               spreadRadius: 1,
               blurRadius: 10,
               offset: const Offset(0, 4), // Shadow position
@@ -163,7 +163,7 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF5A9CA0).withOpacity(0.4),
+            color: const Color(0xFF5A9CA0).withValues(alpha: 0.4),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -177,7 +177,7 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
             top: -20,
             child: CircleAvatar(
               radius: 60,
-              backgroundColor: Colors.white.withOpacity(0.1),
+              backgroundColor: Colors.white.withValues(alpha: 0.1),
             ),
           ),
 
@@ -348,7 +348,7 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
       child: ListView.separated(
         scrollDirection: Axis.horizontal, // Horizontal scrolling
         itemCount: categories.length,
-        separatorBuilder: (_, __) =>
+        separatorBuilder: (_, _) =>
             const SizedBox(width: 20), // Spacing between items
         itemBuilder: (context, index) {
           final cat = categories[index];
@@ -363,7 +363,7 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.grey.withOpacity(0.05),
+                      color: Colors.grey.withValues(alpha: 0.05),
                       blurRadius: 10,
                       spreadRadius: 2,
                     ),
@@ -374,7 +374,7 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
                   child: Icon(
                     cat['icon'] as IconData,
                     color:
-                        (cat['color'] as Color?)?.withOpacity(1.0) ??
+                        (cat['color'] as Color?)?.withValues(alpha: 1.0) ??
                         Colors.blue, // Using the color for the icon
                     size: 28,
                   ),
@@ -416,7 +416,7 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.grey.withOpacity(0.08),
+                  color: Colors.grey.withValues(alpha: 0.08),
                   blurRadius: 15,
                   offset: const Offset(0, 5),
                 ),
@@ -521,7 +521,7 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, -5),
           ),

@@ -17,7 +17,7 @@ class MedShakthiApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      home: const PharmacyHomeScreen(),
+      home: const LoginPage(),
     );
   }
 }
