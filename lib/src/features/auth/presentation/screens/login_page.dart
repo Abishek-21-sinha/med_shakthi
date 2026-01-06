@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:med_shakthi/src/features/products/presentation/screens/pharmacy_home_screen.dart';
+import 'package:med_shakthi/src/features/auth/presentation/screens/supplier_signup_page.dart';
+import 'package:med_shakthi/src/features/auth/presentation/screens/signup_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -183,6 +185,77 @@ class _LoginPageState extends State<LoginPage> {
                       _socialIcon(Icons.apple, Colors.black),
                     ],
                   ),
+
+                  const SizedBox(height: 40),
+
+                  /// REGISTER AS PHARMACY/USER
+                  Center(
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SignupPage(),
+                          ),
+                        );
+                      },
+                      child: RichText(
+                        text: TextSpan(
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 14,
+                          ),
+                          children: [
+                            const TextSpan(text: "Don't have an account? "),
+                            TextSpan(
+                              text: 'Sign up',
+                              style: TextStyle(
+                                color: const Color(0xFF6AA39B),
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  /// REGISTER AS SUPPLIER
+                  Center(
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SupplierSignupPage(),
+                          ),
+                        );
+                      },
+                      child: RichText(
+                        text: TextSpan(
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 14,
+                          ),
+                          children: [
+                            const TextSpan(text: 'Are you a distributor? '),
+                            TextSpan(
+                              text: 'Register as Supplier',
+                              style: TextStyle(
+                                color: const Color(0xFF6AA39B),
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                 ],
               ),
             ),
