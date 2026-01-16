@@ -3,9 +3,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
-import 'package:med_shakthi/src/features/checkout/presentation/screens/payment.dart';
-import 'AddressModel.dart';
-import 'AddressStore.dart';
+import '../models/AddressModel.dart';
+import '../AddressStore.dart';
+import 'PaymentMethodScreen.dart';
 
 
 

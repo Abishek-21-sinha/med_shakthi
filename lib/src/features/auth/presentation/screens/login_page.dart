@@ -3,7 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:med_shakthi/src/features/dashboard/pharmacy_home_screen.dart';
 import 'package:med_shakthi/src/features/auth/presentation/screens/supplier_signup_page.dart';
 import 'package:med_shakthi/src/features/auth/presentation/screens/signup_page.dart';
-// Assuming SupplierDashboard is located here based on your project structure
 import 'package:med_shakthi/src/features/dashboard/supplier_dashboard.dart';
 
 class LoginPage extends StatefulWidget {

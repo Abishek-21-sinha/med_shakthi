@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../../orders/order_placed_screen.dart';
 
 class PaymentMethodScreen extends StatefulWidget {
+  const PaymentMethodScreen({super.key});
+
   @override
   State<PaymentMethodScreen> createState() => _PaymentMethodScreenState();
 }
@@ -127,7 +130,7 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
                   const Text("Promo & Discount"),
                   Container(
                     padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.teal,
                       borderRadius: BorderRadius.circular(20),
@@ -159,7 +162,13 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const OrderPlacedScreen(),
+                      ),
+                    );
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.teal,
                     shape: RoundedRectangleBorder(

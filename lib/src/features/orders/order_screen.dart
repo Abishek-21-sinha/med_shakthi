@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'chat_screen.dart';
 import 'order_detail_screen.dart';
+
 
 // --- DATA MODEL ---
 class OrderItem {
@@ -11,7 +13,7 @@ class OrderItem {
   final String imagePath;
   final int quantity;
   final String
-      status; // 'orderaccepted', 'packagingandshipping', 'in transit', 'packageDelivered'
+  status; // 'orderaccepted', 'packagingandshipping', 'in transit', 'packageDelivered'
   final String orderDate;
   final String deliveryLocation;
   final String paymentMode;
@@ -288,6 +290,45 @@ class _OrderScreenState extends State<OrderScreen> {
                       ),
                     ),
                     const Spacer(),
+                    // Chat button
+                    IconButton(
+                      icon: const Icon(Icons.chat_bubble_outline,
+                          color: Color(0xFF4C8077), size: 20),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ChatScreen(
+                              supplier: SupplierProfile(
+                                id: 'supplier_${order.id}',
+                                name: order.brand,
+                                profileImage: '',
+                                phone: '+91 9876543210',
+                                email:
+                                '${order.brand.toLowerCase()}@medstore.com',
+                                isOnline: true,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                      tooltip: 'Chat with Supplier',
+                    ),
+                    // Call button
+                    IconButton(
+                      icon: const Icon(Icons.call_outlined,
+                          color: Color(0xFF4C8077), size: 20),
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Calling supplier...'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      tooltip: 'Call Supplier',
+                    ),
+                    const SizedBox(width: 8),
                     ElevatedButton(
                       onPressed: () {
                         // Reorder logic

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:med_shakthi/src/features/dashboard/pharmacy_home_screen.dart';
-import 'package:med_shakthi/src/features/dashboard/supplier_dashboard.dart';
-import 'package:med_shakthi/src/features/auth/presentation/screens/login_page.dart';
+import '../../dashboard/supplier_dashboard.dart';
+import 'screens/login_page.dart';
+import '../../dashboard/pharmacy_home_screen.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -22,24 +22,30 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _checkUserRole() async {
-    final user = Supabase.instance.client.auth.currentUser;
+    final session = Supabase.instance.client.auth.currentSession;
+    final user = session?.user;
+
     if (user == null) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
 
-    // Check if user ID exists in 'suppliers' table
-    final data = await Supabase.instance.client
-        .from('suppliers')
-        .select()
-        .eq('user_id', user.id)
-        .maybeSingle();
+    try {
+      // Check 'suppliers' table logic
+      final data = await Supabase.instance.client
+          .from('suppliers')
+          .select()
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-    if (mounted) {
-      setState(() {
-        _isSupplier = data != null;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isSupplier = data != null;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -47,13 +53,13 @@ class _AuthGateState extends State<AuthGate> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFF4C8077))),
       );
     }
 
-    final user = Supabase.instance.client.auth.currentUser;
+    final session = Supabase.instance.client.auth.currentSession;
 
-    if (user == null) {
+    if (session == null) {
       return const LoginPage();
     }
 
@@ -64,4 +70,3 @@ class _AuthGateState extends State<AuthGate> {
     }
   }
 }
-

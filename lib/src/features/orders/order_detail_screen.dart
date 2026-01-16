@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'chat_screen.dart';
 import 'order_screen.dart';
+
 
 class OrderDetailScreen extends StatelessWidget {
   final OrderItem order;
@@ -241,6 +243,92 @@ class OrderDetailScreen extends StatelessWidget {
             // Buttons
             Row(
               children: [
+                // Chat Button
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ChatScreen(
+                            supplier: SupplierProfile(
+                              id: 'supplier_${order.id}',
+                              name: order.brand,
+                              profileImage: '',
+                              phone: '+91 9876543210',
+                              email:
+                              '${order.brand.toLowerCase()}@medstore.com',
+                              isOnline: true,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.chat_bubble_outline),
+                    label: const Text('Chat'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: themeColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Call Button
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Calling supplier...'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.call_outlined),
+                    label: const Text('Call'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Invoice Button
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Invoice feature coming soon!'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.receipt_long),
+                    label: const Text('Invoice'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.purple,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () {
@@ -336,8 +424,8 @@ class OrderDetailScreen extends StatelessWidget {
                         : Colors.grey.shade300,
                     border: isCurrent
                         ? Border.all(
-                            color: _getStatusColor(statuses[circleIndex]),
-                            width: 3)
+                        color: _getStatusColor(statuses[circleIndex]),
+                        width: 3)
                         : null,
                   ),
                   child: isCompleted

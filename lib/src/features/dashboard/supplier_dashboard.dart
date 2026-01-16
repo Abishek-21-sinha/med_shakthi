@@ -1,20 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
-
-import '../orders/orders_page.dart';
-
-
+import 'package:fl_chart/fl_chart.dart'; // Added from teammate's code
+import 'package:med_shakthi/src/features/supplier/inventory/ui/supplier_inventory_screen.dart';
+import '../supplier/orders/orders_page.dart';
 import '../profile/presentation/screens/supplier_profile_screen.dart';
+import '../supplier/inventory/ui/add_product_page.dart';
+import '../supplier/sales/sales_page.dart';
 
-
-void main() {
-  runApp(
-    const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: SupplierDashboard(),
-    ),
-  );
-}
 
 class SupplierDashboard extends StatefulWidget {
   const SupplierDashboard({super.key});
@@ -24,30 +15,36 @@ class SupplierDashboard extends StatefulWidget {
 }
 
 class _SupplierDashboardState extends State<SupplierDashboard> {
-  int _selectedIndex = 0; // State for bottom nav index
+  int _selectedIndex = 0;
 
   void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-
-    // Handle navigation based on index
-    if (index == 4) { // Assuming 'Profile' is at index 4
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const SupplierProfileScreen()),
-      );
-      // Reset index after navigation if you want dashboard to stay on 'Home'
-      // Or keep it to show selected state, but since we push a new page:
-      setState(() => _selectedIndex = 0);
+    if (index == 4) {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const SupplierProfileScreen()));
+    } else if (index == 3) {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const OrdersPage()));
+    } else {
+      setState(() => _selectedIndex = index);
     }
-    // Add other index checks here if needed (e.g., Orders at index 3)
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA), // Light grey background from your image
+      backgroundColor: const Color(0xFFF7F8FA),
+
+      // Kept the FAB for adding products as it's a key feature we built
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const AddProductPage()),
+          );
+        },
+        backgroundColor: const Color(0xFF4CA6A8),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text("Add Product", style: TextStyle(color: Colors.white)),
+      ),
+
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -55,18 +52,18 @@ class _SupplierDashboardState extends State<SupplierDashboard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 20),
-              _buildTopBar(),
+              _buildTopBar(), // Updated from teammate's code
               const SizedBox(height: 20),
               _buildPromoBanner(),
               const SizedBox(height: 30),
-              _buildSectionHeader("Categories"),
+              _buildSectionHeader("Categories"), // Updated label
               const SizedBox(height: 15),
-              _buildCategoryList(context), // Added context for navigation
+              _buildCategoryList(context), // Updated with Sales & Inventory
               const SizedBox(height: 30),
               _buildSectionHeader("Performance Stats"),
               const SizedBox(height: 15),
               _buildPerformanceGrid(context),
-              const SizedBox(height: 20),
+              const SizedBox(height: 80), // Space for FAB
             ],
           ),
         ),
@@ -77,6 +74,7 @@ class _SupplierDashboardState extends State<SupplierDashboard> {
 
   // --- UI Components ---
 
+  // Updated TopBar from teammate's code (includes Cart Icon)
   Widget _buildTopBar() {
     return Row(
       children: [
@@ -185,11 +183,12 @@ class _SupplierDashboardState extends State<SupplierDashboard> {
     );
   }
 
+  // Merged Category List: Includes "Orders", "Sales", "Inventory" (from us), and "Payouts"
   Widget _buildCategoryList(BuildContext context) {
     final List<Map<String, dynamic>> cats = [
       {"icon": Icons.inventory_2, "label": "Orders"},
       {"icon": Icons.analytics, "label": "Sales"},
-      {"icon": Icons.people, "label": "Clients"},
+      {"icon": Icons.inventory, "label": "Inventory"}, // Our feature
       {"icon": Icons.account_balance_wallet, "label": "Payouts"},
     ];
 
@@ -203,10 +202,12 @@ class _SupplierDashboardState extends State<SupplierDashboard> {
           return InkWell(
             onTap: () {
               if (cats[index]['label'] == "Orders") {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const OrdersPage()),
-                );
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const OrdersPage()));
+              } else if (cats[index]['label'] == "Inventory") {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const SupplierInventoryScreen()));
+              }
+               else if (cats[index]['label'] == "Sales") {
+               Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesPage()));
               }
             },
             borderRadius: BorderRadius.circular(50),
@@ -303,8 +304,8 @@ class _SupplierDashboardState extends State<SupplierDashboard> {
       selectedItemColor: const Color(0xFF4CA6A8),
       unselectedItemColor: Colors.grey,
       showUnselectedLabels: true,
-      currentIndex: _selectedIndex, // Use state index
-      onTap: _onItemTapped, // Call navigation handler
+      currentIndex: _selectedIndex,
+      onTap: _onItemTapped,
       items: const [
         BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: "Home"),
         BottomNavigationBarItem(icon: Icon(Icons.grid_view), label: "Category"),
