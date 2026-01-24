@@ -9,16 +9,17 @@ class WishlistPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Wishlist")),
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: const Text("Wishlist"),
+      ),
       body: StreamBuilder(
         stream: wishlistService.getWishlistStream(),
         builder: (context, snapshot) {
           final items = snapshot.data ?? [];
 
           if (items.isEmpty) {
-            return const Center(
-              child: Text("No items in wishlist"),
-            );
+            return const Center(child: Text("No items in wishlist"));
           }
 
           return ListView.builder(

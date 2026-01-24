@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:med_shakthi/src/core/api/supabase_service.dart';
-import 'package:med_shakthi/src/features/auth/data/models/supplier_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 // Assuming SupplierDashboard is located here based on your project structure
 import 'package:med_shakthi/src/features/dashboard/supplier_dashboard.dart';

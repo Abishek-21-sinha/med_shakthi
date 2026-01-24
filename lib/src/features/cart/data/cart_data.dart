@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-
-import '../presentation/screens/cart_page.dart';
 import 'cart_item.dart';
 
 

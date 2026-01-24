@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'chat_screen.dart';
 import 'order_detail_screen.dart';
 
-
 // --- DATA MODEL ---
 class OrderItem {
   final String id;
@@ -138,6 +137,7 @@ class _OrderScreenState extends State<OrderScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        automaticallyImplyLeading: false,
         title: const Text(
           'My Orders',
           style: TextStyle(
@@ -174,10 +174,7 @@ class _OrderScreenState extends State<OrderScreen> {
           const SizedBox(height: 8),
           Text(
             'Your order history will appear here',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey.shade500,
-            ),
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
           ),
         ],
       ),
@@ -225,10 +222,7 @@ class _OrderScreenState extends State<OrderScreen> {
                         color: Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Image.asset(
-                        order.imagePath,
-                        fit: BoxFit.cover,
-                      ),
+                      child: Image.asset(order.imagePath, fit: BoxFit.cover),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -263,7 +257,9 @@ class _OrderScreenState extends State<OrderScreen> {
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: _getStatusColor(order.status).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
@@ -292,8 +288,11 @@ class _OrderScreenState extends State<OrderScreen> {
                     const Spacer(),
                     // Chat button
                     IconButton(
-                      icon: const Icon(Icons.chat_bubble_outline,
-                          color: Color(0xFF4C8077), size: 20),
+                      icon: const Icon(
+                        Icons.chat_bubble_outline,
+                        color: Color(0xFF4C8077),
+                        size: 20,
+                      ),
                       onPressed: () {
                         Navigator.push(
                           context,
@@ -305,7 +304,7 @@ class _OrderScreenState extends State<OrderScreen> {
                                 profileImage: '',
                                 phone: '+91 9876543210',
                                 email:
-                                '${order.brand.toLowerCase()}@medstore.com',
+                                    '${order.brand.toLowerCase()}@medstore.com',
                                 isOnline: true,
                               ),
                             ),
@@ -316,8 +315,11 @@ class _OrderScreenState extends State<OrderScreen> {
                     ),
                     // Call button
                     IconButton(
-                      icon: const Icon(Icons.call_outlined,
-                          color: Color(0xFF4C8077), size: 20),
+                      icon: const Icon(
+                        Icons.call_outlined,
+                        color: Color(0xFF4C8077),
+                        size: 20,
+                      ),
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -334,7 +336,8 @@ class _OrderScreenState extends State<OrderScreen> {
                         // Reorder logic
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content: Text('Reordered successfully!')),
+                            content: Text('Reordered successfully!'),
+                          ),
                         );
                       },
                       style: ElevatedButton.styleFrom(
@@ -344,7 +347,9 @@ class _OrderScreenState extends State<OrderScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
                       ),
                       child: const Text('Reorder'),
                     ),
