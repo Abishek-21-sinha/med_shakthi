@@ -162,7 +162,7 @@ class _LoginPageState extends State<LoginPage> {
                   _label('Email'),
                   _textField(
                     controller: _emailController,
-                    hint: 'Email address@gmail.com',
+                    hint: 'emailaddress@gmail.com',
                     keyboardType: TextInputType.emailAddress,
                     validator: (value) => value != null && value.contains('@')
                         ? null

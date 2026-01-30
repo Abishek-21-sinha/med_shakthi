@@ -18,11 +18,8 @@ class CartPage extends StatelessWidget {
   Widget build(BuildContext context) {
     // Listen to changes in CartData using Provider.of
     final cart = Provider.of<CartData>(context);
-    final int shipping = cart.items.isNotEmpty
-        ? 199
-        : 0; // Updated to 199 as per walkthrough
+    final int shipping = cart.items.isNotEmpty ? 10 : 0;
     final double total = cart.subTotal + shipping;
-
     return Scaffold(
       backgroundColor: backgroundColor,
       body: cart.items.isEmpty
