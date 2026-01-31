@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../cart/presentation/screens/cart_page.dart';
 import '../orders/orders_page.dart';
+import '../profile/presentation/screens/chat_list_screen.dart';
 import '../profile/presentation/screens/supplier_category_page.dart';
+import '../profile/presentation/screens/supplier_payout_page.dart';
 import '../profile/presentation/screens/supplier_profile_screen.dart';
 import '../profile/presentation/screens/supplier_wishlist_page.dart';
-import '../supplier/inventory/ui/add_product_page.dart';  // ✅ ADDED FOR FAB
+import '../supplier/inventory/ui/add_product_page.dart';  //  ADDED FOR FAB
 
 class SupplierDashboard extends StatefulWidget {
   const SupplierDashboard({super.key});
@@ -31,7 +33,7 @@ class _SupplierDashboardState extends State<SupplierDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
-      // ✅ FAB ADDED - Shows on ALL tabs!
+      //  FAB ADDED - Shows on ALL tabs!
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           Navigator.push(
@@ -232,11 +234,38 @@ class SupplierDashboardHome extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: cats.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 25),
+        separatorBuilder: (_, __) => const SizedBox(width: 25),
         itemBuilder: (context, index) {
+          final label = cats[index]['label'];
+
           return InkWell(
-            onTap: () {},
             borderRadius: BorderRadius.circular(50),
+            onTap: () {
+              //  NAVIGATION LOGIC
+              if (label == "Orders") {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const OrdersPage()),
+                );
+              }
+              else if (label == "Clients") {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ChatListScreen()),
+                );
+              }
+              else if (label == "Payouts") {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SupplierPayoutPage()),
+                );
+              }
+              else if (label == "Sales") {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Sales page coming soon")),
+                );
+              }
+            },
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -246,13 +275,20 @@ class SupplierDashboardHome extends StatelessWidget {
                     color: Colors.white,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(cats[index]['icon'],
-                      color: const Color(0xFF4CA6A8)),
+                  child: Icon(
+                    cats[index]['icon'],
+                    color: const Color(0xFF4CA6A8),
+                    size: 26,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  cats[index]['label'],
-                  style: const TextStyle(fontSize: 13, color: Colors.black54),
+                  label,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.black54,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
@@ -261,6 +297,7 @@ class SupplierDashboardHome extends StatelessWidget {
       ),
     );
   }
+
 
   Widget _buildPerformanceGrid() {
     return GridView.count(
