@@ -58,6 +58,39 @@ class _TopBar extends StatefulWidget {
 }
 
 class _TopBarState extends State<_TopBar> {
+  bool isSupplier = false;
+  bool isLoadingRole = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkUserRole();
+  }
+
+  Future<void> _checkUserRole() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user != null) {
+      final supplier = await Supabase.instance.client
+          .from('suppliers')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      if (mounted) {
+        setState(() {
+          isSupplier = supplier != null;
+          isLoadingRole = false;
+        });
+      }
+    } else {
+      if (mounted) {
+        setState(() {
+          isLoadingRole = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Watch for changes to update the heart icon
@@ -90,31 +123,33 @@ class _TopBarState extends State<_TopBar> {
           ),
           const Spacer(),
 
-          // ❤️ FIXED WISHLIST ICON
-          InkWell(
-            onTap: () {
-              if (isWishlisted) {
-                context.read<WishlistService>().removeFromWishlist(
-                  widget.product.id,
-                );
-              } else {
-                context.read<WishlistService>().addToWishlist(
-                  WishlistItem(
-                    id: widget.product.id,
-                    name: widget.product.name,
-                    price: widget.product.price,
-                    image: widget.product.image,
-                  ),
-                );
-              }
-            },
-            child: Icon(
-              isWishlisted ? Icons.favorite : Icons.favorite_border,
-              color: isWishlisted ? Colors.red : Colors.grey,
+          // ❤️ Show wishlist ONLY if NOT a supplier and finished loading role
+          if (!isLoadingRole && !isSupplier)
+            InkWell(
+              onTap: () {
+                if (isWishlisted) {
+                  context.read<WishlistService>().removeFromWishlist(
+                    widget.product.id,
+                  );
+                } else {
+                  context.read<WishlistService>().addToWishlist(
+                    WishlistItem(
+                      id: widget.product.id,
+                      name: widget.product.name,
+                      price: widget.product.price,
+                      image: widget.product.image,
+                    ),
+                  );
+                }
+              },
+              child: Icon(
+                isWishlisted ? Icons.favorite : Icons.favorite_border,
+                color: isWishlisted ? Colors.red : Colors.grey,
+              ),
             ),
-          ),
 
-          const SizedBox(width: 12),
+          if (!isLoadingRole && !isSupplier) const SizedBox(width: 12),
+
           Icon(Icons.share, color: Theme.of(context).iconTheme.color),
         ],
       ),
@@ -277,6 +312,7 @@ class _BottomBar extends StatefulWidget {
 
 class _BottomBarState extends State<_BottomBar> {
   bool isSupplier = false;
+  bool isLoadingRole = true;
 
   @override
   void initState() {
@@ -297,6 +333,13 @@ class _BottomBarState extends State<_BottomBar> {
       if (mounted) {
         setState(() {
           isSupplier = supplier != null;
+          isLoadingRole = false;
+        });
+      }
+    } else {
+      if (mounted) {
+        setState(() {
+          isLoadingRole = false;
         });
       }
     }
@@ -304,7 +347,7 @@ class _BottomBarState extends State<_BottomBar> {
 
   @override
   Widget build(BuildContext context) {
-    if (isSupplier) return const SizedBox.shrink();
+    if (isLoadingRole || isSupplier) return const SizedBox.shrink();
 
     return Container(
       padding: const EdgeInsets.all(16),

@@ -367,7 +367,8 @@ class _SupplierOrderListState extends State<SupplierOrderList> {
                             Text("Qty: $qty • ₹$price"),
                             const SizedBox(height: 12),
                             Text(
-                              "Order #${orderId.toString().substring(0, 8)}",
+                              parentOrder['order_number']?.toString() ??
+                                  "Order #${orderId.toString().substring(0, 8)}",
                               style: const TextStyle(fontSize: 13),
                             ),
                             const SizedBox(height: 4),

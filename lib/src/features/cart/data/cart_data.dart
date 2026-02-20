@@ -14,10 +14,9 @@ class CartData extends ChangeNotifier {
 
   double get subTotal => _items.fold(0, (t, i) => t + i.price * i.quantity);
 
-  double get selectedSubTotal =>
-    _items
-        .where((item) => item.isSelected)
-        .fold(0, (sum, item) => sum + item.price * item.quantity);
+  double get selectedSubTotal => _items
+      .where((item) => item.isSelected)
+      .fold(0, (sum, item) => sum + item.price * item.quantity);
 
   StreamSubscription<AuthState>? _authSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _cartStreamSubscription;
@@ -144,14 +143,12 @@ class CartData extends ChangeNotifier {
       // Upsert
       await Supabase.instance.client.from('cart_items').upsert({
         'user_id': user.id,
-        'id': item.id, // Keeping item ID same
         'product_id': item.id, // Assuming CartItem.id is product_id
         'quantity': item.quantity,
         'name': item.name,
         'price': item.price,
         'image': item.imagePath ?? item.imageUrl,
-        // Add other fields if needed, or rely on product ID join
-      });
+      }, onConflict: 'user_id, product_id');
     } catch (e) {
       debugPrint("Error adding to remote: $e");
     }
@@ -224,11 +221,10 @@ class CartData extends ChangeNotifier {
   }
 
   void toggleSelection(int index, bool value) {
-  _items[index].isSelected = value;
-  notifyListeners();
-  _saveLocalCart();
-}
-
+    _items[index].isSelected = value;
+    notifyListeners();
+    _saveLocalCart();
+  }
 
   // New method for logout
   Future<void> clearLocalStateOnly() async {

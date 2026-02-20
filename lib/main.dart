@@ -42,17 +42,13 @@ Future<void> main() async {
       throw Exception('Missing configuration in .env');
     }
 
-    await Supabase.initialize(
-      url: supabaseUrl,
-      anonKey: supabaseAnonKey,
-    );
+    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
 
     // Initialize OneSignal
     OneSignal.initialize(oneSignalAppId);
 
     // Ask notification permission (important for Android 13+)
     await OneSignal.Notifications.requestPermission(true);
-
   } catch (e) {
     debugPrint('Initialization error: $e');
   }
@@ -97,6 +93,10 @@ class MyApp extends StatelessWidget {
 class RootRouter extends StatefulWidget {
   const RootRouter({super.key});
 
+  /// Set to true during signup logic to prevent AuthGate from querying roles
+  /// before DB inserts are completed.
+  static bool suppressAuthRedirect = false;
+
   @override
   State<RootRouter> createState() => _RootRouterState();
 }
@@ -138,8 +138,9 @@ class _RootRouterState extends State<RootRouter> {
         // 🧹 Clear navigation stack whenever auth state changes
         // This ensures any pushed routes (like Signup/Forgot Pwd) are cleared
         // and we are back at the RootRouter which has the PopScope.
-        if (event == AuthChangeEvent.signedIn ||
-            event == AuthChangeEvent.signedOut) {
+        if ((event == AuthChangeEvent.signedIn ||
+                event == AuthChangeEvent.signedOut) &&
+            !RootRouter.suppressAuthRedirect) {
           navigatorKey.currentState?.popUntil((route) => route.isFirst);
         }
       });
@@ -310,10 +311,59 @@ class _AuthGateState extends State<AuthGate> {
   void initState() {
     super.initState();
     _checkUserRole();
+    _setupOneSignalObserver();
+  }
+
+  void _setupOneSignalObserver() {
+    // 1. Check synchronously first just in case it's already available
+    final initialId = OneSignal.User.pushSubscription.id;
+    if (initialId != null && initialId.isNotEmpty) {
+      _updatePlayerIdInDb(initialId);
+    }
+
+    // 2. Listen for future changes (e.g. late initialization or permission grant)
+    OneSignal.User.pushSubscription.addObserver((state) {
+      final newId = state.current.id;
+      if (newId != null && newId.isNotEmpty) {
+        _updatePlayerIdInDb(newId);
+      }
+    });
+  }
+
+  Future<void> _updatePlayerIdInDb(String playerId) async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+
+      // Check if they are a supplier
+      final supplierData = await Supabase.instance.client
+          .from('suppliers')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      if (supplierData != null) {
+        await Supabase.instance.client
+            .from('suppliers')
+            .update({'onesignal_player_id': playerId})
+            .eq('user_id', user.id);
+        debugPrint(
+          "Successfully updated OneSignal Player ID for supplier: $playerId",
+        );
+      }
+    } catch (e) {
+      debugPrint("Failed to update OneSignal Player ID: $e");
+    }
   }
 
   Future<void> _checkUserRole() async {
     try {
+      // ⏳ Wait if a signup process is currently orchestrating DB insertions
+      while (RootRouter.suppressAuthRedirect) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (!mounted) return;
+      }
+
       final user = Supabase.instance.client.auth.currentUser;
 
       if (user == null) {
@@ -332,16 +382,6 @@ class _AuthGateState extends State<AuthGate> {
         setState(() {
           _isSupplier = true;
         });
-
-        // SAVE ONESIGNAL PLAYER ID
-        final playerId = OneSignal.User.pushSubscription.id;
-
-        if (playerId != null) {
-          await Supabase.instance.client
-              .from('suppliers')
-              .update({'onesignal_player_id': playerId})
-              .eq('user_id', user.id);
-        }
       }
 
       if (mounted) {

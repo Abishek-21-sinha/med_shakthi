@@ -86,7 +86,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          'Order #$orderGroupId',
+          widget.orderData['order_number']?.toString() ??
+              'Order #${orderGroupId.substring(0, 8).toUpperCase()}',
           style: TextStyle(
             color: Theme.of(context).appBarTheme.foregroundColor,
             fontSize: 18,

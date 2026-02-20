@@ -13,7 +13,6 @@ import 'package:med_shakthi/src/features/products/presentation/screens/product_p
 import 'package:provider/provider.dart';
 
 import '../profile/presentation/screens/ai_assistant_page.dart';
-import '../profile/presentation/screens/chat_details_screen.dart';
 import '../profile/presentation/screens/profile_screen.dart';
 import 'package:med_shakthi/src/features/cart/data/cart_data.dart';
 import 'package:med_shakthi/src/features/cart/data/cart_item.dart';
@@ -139,43 +138,10 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
 
   // --- WIDGETS ---
 
-  /// Builds the top bar containing the Scan button, Search bar, and Cart button.
+  /// Builds the top bar containing the Search bar and Cart button.
   Widget _buildTopBar() {
     return Row(
       children: [
-        // 👤 PROFILE ICON (replaced scanner)
-        GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const AccountPage()),
-            );
-          },
-          child: Container(
-            height: 50,
-            width: 50,
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withValues(alpha: 0.1),
-                  spreadRadius: 1,
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Icon(
-              Icons.person_outline, //  Profile icon
-              color: Theme.of(context).iconTheme.color,
-              size: 26,
-            ),
-          ),
-        ),
-
-        const SizedBox(width: 12),
-
         //  SEARCH BAR
         Expanded(
           child: Container(
@@ -580,8 +546,8 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
       {'icon': Icons.home, 'label': 'Home'},
       {'icon': Icons.grid_view, 'label': 'Category'},
       {'icon': Icons.favorite_border, 'label': 'Wishlist'},
-      {'icon': Icons.chat_bubble_outline, 'label': 'Chatbot'},
-      {'icon': Icons.receipt_long, 'label': 'Order'},
+      {'icon': Icons.receipt_long, 'label': 'Orders'},
+      {'icon': Icons.person_outline, 'label': 'Profile'},
     ];
 
     return Container(
@@ -619,19 +585,17 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
 
     return GestureDetector(
       onTap: () {
-        if (index == 4) {
+        if (index == 3) {
           //  Orders Page
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => OrdersPage()),
           );
-        } else if (index == 3) {
-          //  Chatbot Page
+        } else if (index == 4) {
+          // Profile Page
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => const ChatDetailScreen(clientName: 'Abhishek'),
-            ),
+            MaterialPageRoute(builder: (_) => const AccountPage()),
           );
         } else {
           // Home / Category / Wishlist

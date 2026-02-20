@@ -10,8 +10,7 @@ class SupplierNotificationsPage extends StatefulWidget {
       _SupplierNotificationsPageState();
 }
 
-class _SupplierNotificationsPageState
-    extends State<SupplierNotificationsPage> {
+class _SupplierNotificationsPageState extends State<SupplierNotificationsPage> {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   bool _isLoading = true;
@@ -90,17 +89,15 @@ class _SupplierNotificationsPageState
       final user = _supabase.auth.currentUser;
       if (user == null) return;
 
-      await _supabase
-          .from('supplier_notification_preferences')
-          .upsert({
-            'user_id': user.id,
-            'new_orders': _newOrders,
-            'low_stock': _lowStock,
-            'payment_updates': _paymentUpdates,
-            'promotions': _promotions,
-            'system_alerts': _systemAlerts,
-            'updated_at': DateTime.now().toIso8601String(),
-          }, onConflict: 'user_id');
+      await _supabase.from('supplier_notification_preferences').upsert({
+        'user_id': user.id,
+        'new_orders': _newOrders,
+        'low_stock': _lowStock,
+        'payment_updates': _paymentUpdates,
+        'promotions': _promotions,
+        'system_alerts': _systemAlerts,
+        'updated_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'user_id');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -114,9 +111,9 @@ class _SupplierNotificationsPageState
     } catch (e) {
       debugPrint('Error saving preferences: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
       }
     } finally {
       if (mounted) setState(() => _isSavingPrefs = false);
@@ -131,8 +128,9 @@ class _SupplierNotificationsPageState
           .eq('id', notificationId);
 
       setState(() {
-        final index =
-            _notifications.indexWhere((n) => n['id'] == notificationId);
+        final index = _notifications.indexWhere(
+          (n) => n['id'] == notificationId,
+        );
         if (index != -1) _notifications[index]['is_read'] = true;
       });
     } catch (e) {
@@ -147,7 +145,8 @@ class _SupplierNotificationsPageState
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Clear All Notifications'),
         content: const Text(
-            'Are you sure you want to clear all notifications? This cannot be undone.'),
+          'Are you sure you want to clear all notifications? This cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -157,11 +156,14 @@ class _SupplierNotificationsPageState
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.redAccent,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child:
-                const Text('Clear All', style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'Clear All',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -251,8 +253,9 @@ class _SupplierNotificationsPageState
 
   @override
   Widget build(BuildContext context) {
-    final unreadCount =
-        _notifications.where((n) => n['is_read'] != true).length;
+    final unreadCount = _notifications
+        .where((n) => n['is_read'] != true)
+        .length;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -291,8 +294,7 @@ class _SupplierNotificationsPageState
                         _buildToggleTile(
                           icon: Icons.shopping_bag_outlined,
                           label: 'New Orders',
-                          subtitle:
-                              'Get notified when you receive new orders',
+                          subtitle: 'Get notified when you receive new orders',
                           value: _newOrders,
                           color: const Color(0xFF4C8077),
                           onChanged: (v) => setState(() => _newOrders = v),
@@ -313,28 +315,23 @@ class _SupplierNotificationsPageState
                               'Notifications for payouts and transactions',
                           value: _paymentUpdates,
                           color: Colors.blue,
-                          onChanged: (v) =>
-                              setState(() => _paymentUpdates = v),
+                          onChanged: (v) => setState(() => _paymentUpdates = v),
                         ),
                         _buildToggleTile(
                           icon: Icons.local_offer_outlined,
                           label: 'Promotions & Offers',
-                          subtitle:
-                              'Platform deals and promotional updates',
+                          subtitle: 'Platform deals and promotional updates',
                           value: _promotions,
                           color: Colors.purple,
-                          onChanged: (v) =>
-                              setState(() => _promotions = v),
+                          onChanged: (v) => setState(() => _promotions = v),
                         ),
                         _buildToggleTile(
                           icon: Icons.shield_outlined,
                           label: 'System Alerts',
-                          subtitle:
-                              'Important updates about your account',
+                          subtitle: 'Important updates about your account',
                           value: _systemAlerts,
                           color: Colors.grey.shade600,
-                          onChanged: (v) =>
-                              setState(() => _systemAlerts = v),
+                          onChanged: (v) => setState(() => _systemAlerts = v),
                           isLast: true,
                         ),
                         // Save button inside expansion
@@ -386,7 +383,9 @@ class _SupplierNotificationsPageState
                       trailingBadge: unreadCount > 0
                           ? Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF4C8077),
                                 borderRadius: BorderRadius.circular(20),
@@ -404,8 +403,8 @@ class _SupplierNotificationsPageState
                       children: _notifications.isEmpty
                           ? [_buildEmptyState()]
                           : _notifications
-                              .map((n) => _buildNotificationTile(n))
-                              .toList(),
+                                .map((n) => _buildNotificationTile(n))
+                                .toList(),
                     ),
                     const SizedBox(height: 20),
                   ],
@@ -459,15 +458,15 @@ class _SupplierNotificationsPageState
               ],
             ],
           ),
-          childrenPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          childrenPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 10,
+          ),
           children: children,
         ),
       ),
     );
   }
-
-
 
   Widget _buildToggleTile({
     required IconData icon,
@@ -507,17 +506,17 @@ class _SupplierNotificationsPageState
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[500],
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
                     ),
                   ],
                 ),
               ),
               Switch.adaptive(
                 value: value,
-                activeColor: const Color(0xFF4C8077),
+                activeTrackColor: const Color(
+                  0xFF4C8077,
+                ).withValues(alpha: 0.5),
+                activeThumbColor: const Color(0xFF4C8077),
                 onChanged: onChanged,
               ),
             ],
@@ -588,8 +587,9 @@ class _SupplierNotificationsPageState
                           color: const Color(0xFF4C8077),
                           shape: BoxShape.circle,
                           border: Border.all(
-                              color: Theme.of(context).scaffoldBackgroundColor,
-                              width: 1.5),
+                            color: Theme.of(context).scaffoldBackgroundColor,
+                            width: 1.5,
+                          ),
                         ),
                       ),
                     ),
@@ -697,10 +697,7 @@ class _SupplierNotificationsPageState
             const SizedBox(height: 24),
             const Text(
               'Nothing here!!!',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
             Text(

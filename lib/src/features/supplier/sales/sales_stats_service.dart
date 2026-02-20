@@ -21,20 +21,20 @@ class SalesStatsService {
     String supplierId,
   ) async {
     try {
-      // Subscribe to orders table changes
+      // Subscribe to order_details table changes (which accurately tracks supplier orders)
       _ordersSubscription = _supabase
-          .channel('orders_changes')
+          .channel('order_details_changes')
           .onPostgresChanges(
             event: PostgresChangeEvent.all,
             schema: 'public',
-            table: 'orders',
+            table: 'order_details',
             filter: PostgresChangeFilter(
               type: PostgresChangeFilterType.eq,
-              column: 'supplier_code',
-              value: supplierCode,
+              column: 'supplier_id',
+              value: supplierId,
             ),
             callback: (payload) async {
-              // Order change detected
+              // Order detail change detected
               // Fetch fresh stats and emit to stream
               final stats = await fetchSalesStats();
               _statsController.add(stats);
@@ -102,8 +102,12 @@ class SalesStatsService {
     unsubscribe();
   }
 
-  /// Fetches comprehensive supplier dashboard stats from Supabase
-  Future<Map<String, dynamic>> fetchSalesStats() async {
+  /// Fetch sales statistics for the supplier
+  Future<Map<String, dynamic>> fetchSalesStats({
+    String dateRange = 'Month',
+    DateTime? customStartDate,
+    DateTime? customEndDate,
+  }) async {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) {
@@ -174,76 +178,222 @@ class SalesStatsService {
         }
       }
 
-      // 5. Fetch Orders Data
-      final ordersResponse = await _supabase
-          .from('orders')
-          .select(
-            'id, user_id, total_amount, status, created_at, product_id, quantity, price',
-          )
-          .eq('supplier_code', supplierCode);
+      // 5. Fetch Orders Data correctly using order_details inner joined with orders
+      final orderDetailsResponse = await _supabase
+          .from('order_details')
+          .select('''
+            id,
+            product_id,
+            quantity,
+            price,
+            created_at,
+            orders!inner(
+              id,
+              user_id,
+              status,
+              payment_status,
+              created_at
+            )
+          ''')
+          .eq('supplier_id', supplierId);
 
-      final List<dynamic> ordersList = ordersResponse as List<dynamic>;
+      final List<dynamic> orderDetailsList =
+          orderDetailsResponse as List<dynamic>;
 
       double totalRevenue = 0;
       double thisMonthRevenue = 0;
       double lastMonthRevenue = 0;
       double todayRevenue = 0;
+
+      final Set<String> uniqueOrders = {};
+      final Set<String> uniqueOrdersThisMonth = {};
+      final Map<String, String> orderStatuses = {};
+      final Set<String> uniqueClients = {};
+      final Map<String, int> productSales = {};
+
+      // Analytics data structures
+      final Map<String, double> categoryPerformance = {};
+      final List<Map<String, dynamic>> recentTransactions = [];
+
+      DateTime startDate = DateTime(2000); // Default to all time
+      DateTime endDate = now;
+      int trendDays = 7;
+
+      switch (dateRange) {
+        case 'Today':
+          startDate = DateTime(now.year, now.month, now.day);
+          trendDays = 7; // Show 7 days trend even for today
+          break;
+        case 'Week':
+          startDate = DateTime(
+            now.year,
+            now.month,
+            now.day,
+          ).subtract(const Duration(days: 7));
+          trendDays = 7;
+          break;
+        case 'Month':
+          startDate = DateTime(
+            now.year,
+            now.month,
+            now.day,
+          ).subtract(const Duration(days: 30));
+          trendDays = 30;
+          break;
+        case 'Custom':
+          if (customStartDate != null && customEndDate != null) {
+            startDate = customStartDate;
+            endDate = customEndDate;
+            trendDays = endDate.difference(startDate).inDays + 1;
+            if (trendDays <= 0) trendDays = 1;
+          } else {
+            startDate = DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).subtract(const Duration(days: 30));
+            trendDays = 30; // Just default to 30 days for now
+          }
+          break;
+      }
+
+      // Initialize sales trend buckets
+      List<Map<String, dynamic>> salesTrend = [];
+      for (int i = trendDays - 1; i >= 0; i--) {
+        DateTime d = endDate.subtract(Duration(days: i));
+        salesTrend.add({
+          'label': trendDays > 7
+              ? '${d.day}/${d.month}'
+              : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d.weekday -
+                    1],
+          'value': 0.0,
+          'date': DateTime(d.year, d.month, d.day),
+        });
+      }
+
+      for (var item in orderDetailsList) {
+        final Map<String, dynamic> order =
+            item['orders'] as Map<String, dynamic>;
+
+        final double amount =
+            ((item['price'] as num?)?.toDouble() ?? 0.0) *
+            ((item['quantity'] as num?)?.toInt() ?? 0);
+
+        final String orderId = order['id'] ?? '';
+        final String status = (order['status'] ?? 'pending')
+            .toString()
+            .toLowerCase();
+        final DateTime orderCreatedAt = DateTime.parse(order['created_at']);
+        final String userId = order['user_id'] ?? '';
+        final String productId = item['product_id'] ?? '';
+
+        if (orderId.isNotEmpty) {
+          uniqueOrders.add(orderId);
+          orderStatuses[orderId] = status;
+          if (orderCreatedAt.isAfter(firstDayThisMonth)) {
+            uniqueOrdersThisMonth.add(orderId);
+          }
+        }
+
+        // Customers rule: count unique customers who have an active order not yet delivered
+        if (userId.isNotEmpty &&
+            ['pending', 'confirmed', 'shipped', 'cancelled'].contains(status)) {
+          uniqueClients.add(userId);
+        }
+
+        // Find product info for Category Performance and Recent Transactions
+        Map<String, dynamic>? productInfo;
+        if (productId.isNotEmpty) {
+          productSales[productId] = (productSales[productId] ?? 0) + 1;
+          for (var p in productsList) {
+            if (p['id'] == productId) {
+              productInfo = p as Map<String, dynamic>;
+              break;
+            }
+          }
+        }
+
+        // Recent Transactions population
+        recentTransactions.add({
+          'id':
+              '#ORD-${orderId.length >= 5 ? orderId.substring(0, 5).toUpperCase() : orderId.toUpperCase()}', // Short ID
+          'medicine': productInfo?['name'] ?? 'Unknown Product',
+          'qty': item['quantity'].toString(),
+          'amount': '₹${amount.toStringAsFixed(0)}',
+          'status': (order['payment_status'] ?? 'Pending')
+              .toString(), // Raw status string for display
+          'date':
+              '${orderCreatedAt.day.toString().padLeft(2, '0')} ${_getMonthAbbr(orderCreatedAt.month)} ${orderCreatedAt.year}',
+        });
+
+        // Revenue rule: ONLY sum revenue if the item is delivered
+        if (status == 'delivered') {
+          // Time-agnostic metrics
+          if (orderCreatedAt.isAfter(today)) {
+            todayRevenue += amount;
+          }
+
+          if (orderCreatedAt.isAfter(firstDayThisMonth)) {
+            thisMonthRevenue += amount;
+          } else if (orderCreatedAt.isAfter(firstDayLastMonth) &&
+              orderCreatedAt.isBefore(firstDayThisMonth)) {
+            lastMonthRevenue += amount;
+          }
+
+          // Generate trend points regardless of selected dateRange filter, helps visualize the time window
+          final Duration diff =
+              DateTime(endDate.year, endDate.month, endDate.day).difference(
+                DateTime(
+                  orderCreatedAt.year,
+                  orderCreatedAt.month,
+                  orderCreatedAt.day,
+                ),
+              );
+          int daysAgo = diff.inDays;
+          if (daysAgo >= 0 && daysAgo < trendDays) {
+            int idx = trendDays - 1 - daysAgo;
+            if (idx >= 0 && idx < trendDays) {
+              salesTrend[idx]['value'] =
+                  (salesTrend[idx]['value'] as double) + amount;
+            }
+          }
+
+          // DateRange based filtering
+          if ((orderCreatedAt.isAfter(startDate) ||
+                  orderCreatedAt.isAtSameMomentAs(startDate)) &&
+              (orderCreatedAt.isBefore(endDate.add(const Duration(days: 1))))) {
+            totalRevenue += amount;
+
+            // Category Performance
+            final String category = productInfo?['category'] ?? 'Others';
+            categoryPerformance[category] =
+                (categoryPerformance[category] ?? 0) + amount;
+          }
+        }
+      }
+
+      // Sort recent transactions by date (newest first)
+      // Recent transactions are already in order of orderDetailsList (which is likely order of insertion/date if fetched without explicit order, but good enough for now).
+      // We will reverse and take the latest 10 when putting into the return map.
+
       int pendingOrders = 0;
       int confirmedOrders = 0;
       int shippedOrders = 0;
       int deliveredOrders = 0;
-      int totalOrdersCount = ordersList.length;
-      final Set<String> uniqueClients = {};
-      final Map<String, int> productSales = {};
 
-      for (var order in ordersList) {
-        final double amount =
-            (order['total_amount'] as num?)?.toDouble() ??
-            ((order['price'] as num?)?.toDouble() ?? 0.0) *
-                ((order['quantity'] as num?)?.toInt() ?? 0);
-        final String status = (order['status'] ?? 'pending')
-            .toString()
-            .toLowerCase();
-        final DateTime createdAt = DateTime.parse(order['created_at']);
-        final String userId = order['user_id'] ?? '';
-        final String productId = order['product_id'] ?? '';
-
-        totalRevenue += amount;
-        if (userId.isNotEmpty) uniqueClients.add(userId);
-
-        // Track product sales
-        if (productId.isNotEmpty) {
-          productSales[productId] = (productSales[productId] ?? 0) + 1;
-        }
-
-        // Status tracking
-        switch (status) {
-          case 'pending':
-            pendingOrders++;
-            break;
-          case 'confirmed':
-            confirmedOrders++;
-            break;
-          case 'shipped':
-            shippedOrders++;
-            break;
-          case 'delivered':
-            deliveredOrders++;
-            break;
-        }
-
-        // Revenue by time period
-        if (createdAt.isAfter(today)) {
-          todayRevenue += amount;
-        }
-
-        if (createdAt.isAfter(firstDayThisMonth)) {
-          thisMonthRevenue += amount;
-        } else if (createdAt.isAfter(firstDayLastMonth) &&
-            createdAt.isBefore(firstDayThisMonth)) {
-          lastMonthRevenue += amount;
+      for (var status in orderStatuses.values) {
+        if (status == 'pending') {
+          pendingOrders++;
+        } else if (status == 'confirmed') {
+          confirmedOrders++;
+        } else if (status == 'shipped') {
+          shippedOrders++;
+        } else if (status == 'delivered') {
+          deliveredOrders++;
         }
       }
+
+      int totalOrdersCount = uniqueOrders.length;
 
       // 6. Calculate Growth Percentage
       double growth = 0;
@@ -254,10 +404,9 @@ class SalesStatsService {
         growth = 100.0;
       }
 
-      // 7. Calculate Average Order Value
-      double avgOrderValue = totalOrdersCount > 0
-          ? totalRevenue / totalOrdersCount
-          : 0;
+      // 7. Calculate Average Order Value (Running Month) - User requested order count
+      int ordersThisMonthCount = uniqueOrdersThisMonth.length;
+      double avgOrderValue = ordersThisMonthCount.toDouble();
 
       // 8. Monthly Payout (92% after platform fees)
       double monthlyPayout = thisMonthRevenue * 0.92;
@@ -269,10 +418,13 @@ class SalesStatsService {
           ..sort((a, b) => b.value.compareTo(a.value));
 
         for (var entry in sortedProducts.take(3)) {
-          final product = productsList.firstWhere(
-            (p) => p['id'] == entry.key,
-            orElse: () => null,
-          );
+          dynamic product;
+          for (var p in productsList) {
+            if (p['id'] == entry.key) {
+              product = p;
+              break;
+            }
+          }
           if (product != null) {
             topProducts.add({
               'id': product['id'],
@@ -311,6 +463,12 @@ class SalesStatsService {
         'outOfStockCount': outOfStockCount,
         'topProducts': topProducts,
 
+        // Analytics specific
+        'salesTrend': salesTrend,
+        'categoryPerformance': categoryPerformance,
+        'recentTransactions': recentTransactions.reversed
+            .take(10)
+            .toList(), // Take latest 10
         // Metadata
         'updatedAt': DateTime.now().toIso8601String(),
       };
@@ -339,6 +497,29 @@ class SalesStatsService {
       'lowStockCount': 0,
       'outOfStockCount': 0,
       'topProducts': [],
+      'salesTrend7Days': List.filled(7, 0.0),
+      'categoryPerformance': <String, double>{},
+      'paymentStatusBreakdown': {'paid': 0.0, 'pending': 0.0, 'failed': 0.0},
+      'recentTransactions': [],
     };
+  }
+
+  String _getMonthAbbr(int month) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    if (month >= 1 && month <= 12) return months[month - 1];
+    return '';
   }
 }

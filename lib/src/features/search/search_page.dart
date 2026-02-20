@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:csv/csv.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:med_shakthi/src/features/wishlist/data/wishlist_service.dart';
 import 'package:med_shakthi/src/features/wishlist/data/models/wishlist_item_model.dart';
 import 'package:provider/provider.dart';
 import 'package:med_shakthi/src/core/utils/smart_product_image.dart';
 import 'package:med_shakthi/src/features/products/data/models/product_model.dart';
 import 'package:med_shakthi/src/features/products/presentation/screens/product_page.dart';
+import 'dart:async';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -17,138 +17,72 @@ class SearchPage extends StatefulWidget {
 
 class _SearchPageState extends State<SearchPage> {
   final TextEditingController _searchController = TextEditingController();
-  List<Map<String, dynamic>> allMedicines = [];
-  List<Map<String, dynamic>> allDevices = [];
-  List<Map<String, dynamic>> searchResults = [];
-  bool isLoading = true;
+  List<Product> searchResults = [];
+  bool isLoading = false;
   bool isSearching = false;
   String searchQuery = '';
+  Timer? _debounce;
+  final supabase = Supabase.instance.client;
 
   @override
   void initState() {
     super.initState();
-    loadData();
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> loadData() async {
-    try {
-      // Load medicines
-      final String medicinesCSV = await rootBundle.loadString(
-        'assets/data/Medicine_Details.csv',
-      );
-      List<List<dynamic>> medicinesTable = const CsvToListConverter().convert(
-        medicinesCSV,
-      );
-
-      if (medicinesTable.isNotEmpty) {
-        List<String> headers = medicinesTable[0]
-            .map((e) => e.toString())
-            .toList();
-        for (int i = 1; i < medicinesTable.length; i++) {
-          Map<String, dynamic> medicine = {'type': 'medicine'};
-          for (
-            int j = 0;
-            j < headers.length && j < medicinesTable[i].length;
-            j++
-          ) {
-            medicine[headers[j]] = medicinesTable[i][j];
-          }
-          allMedicines.add(medicine);
-        }
-      }
-
-      // Load devices
-      final String devicesCSV = await rootBundle.loadString(
-        'assets/data/medical_device_manuals_dataset.csv',
-      );
-      List<List<dynamic>> devicesTable = const CsvToListConverter().convert(
-        devicesCSV,
-      );
-
-      if (devicesTable.isNotEmpty) {
-        List<String> headers = devicesTable[0]
-            .map((e) => e.toString())
-            .toList();
-        for (int i = 1; i < devicesTable.length; i++) {
-          Map<String, dynamic> device = {'type': 'device'};
-          for (
-            int j = 0;
-            j < headers.length && j < devicesTable[i].length;
-            j++
-          ) {
-            device[headers[j]] = devicesTable[i][j];
-          }
-          allDevices.add(device);
-        }
-      }
-
-      setState(() {
-        isLoading = false;
-      });
-    } catch (e) {
-      debugPrint('Error loading data: $e');
-      setState(() {
-        isLoading = false;
-      });
-    }
-  }
-
   void performSearch(String query) {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+
     if (query.isEmpty) {
-      setState(() {
-        searchResults = [];
-        isSearching = false;
-        searchQuery = '';
-      });
+      if (mounted) {
+        setState(() {
+          searchResults = [];
+          isSearching = false;
+          searchQuery = '';
+          isLoading = false;
+        });
+      }
       return;
     }
 
-    setState(() {
-      isSearching = true;
-      searchQuery = query.toLowerCase();
-      searchResults = [];
+    _debounce = Timer(const Duration(milliseconds: 500), () async {
+      if (!mounted) return;
+      setState(() {
+        isSearching = true;
+        searchQuery = query.toLowerCase();
+        isLoading = true;
+      });
 
-      // Search in medicines
-      for (var medicine in allMedicines) {
-        final name = (medicine['Medicine Name'] ?? '').toString().toLowerCase();
-        final manufacturer = (medicine['Manufacturer'] ?? '')
-            .toString()
-            .toLowerCase();
-        final composition = (medicine['Composition'] ?? '')
-            .toString()
-            .toLowerCase();
-        final uses = (medicine['Uses'] ?? '').toString().toLowerCase();
+      try {
+        // Query products table from Supabase
+        final response = await supabase
+            .from('products')
+            .select('*, suppliers(id, name, supplier_code)')
+            .ilike('name', '%$query%')
+            .limit(50);
 
-        if (name.contains(searchQuery) ||
-            manufacturer.contains(searchQuery) ||
-            composition.contains(searchQuery) ||
-            uses.contains(searchQuery)) {
-          searchResults.add(medicine);
+        final results = (response as List<dynamic>)
+            .map((e) => Product.fromMap(e as Map<String, dynamic>))
+            .toList();
+
+        if (mounted) {
+          setState(() {
+            searchResults = results;
+            isLoading = false;
+          });
         }
-      }
-
-      // Search in devices
-      for (var device in allDevices) {
-        final deviceName = (device['Device_Name'] ?? '')
-            .toString()
-            .toLowerCase();
-        final manufacturer = (device['Manufacturer'] ?? '')
-            .toString()
-            .toLowerCase();
-        final modelNumber = (device['Model_Number'] ?? '')
-            .toString()
-            .toLowerCase();
-
-        if (deviceName.contains(searchQuery) ||
-            manufacturer.contains(searchQuery) ||
-            modelNumber.contains(searchQuery)) {
-          searchResults.add(device);
+      } catch (e) {
+        debugPrint('Error searching Supabase: $e');
+        if (mounted) {
+          setState(() {
+            isLoading = false;
+          });
         }
       }
     });
@@ -282,12 +216,8 @@ class _SearchPageState extends State<SearchPage> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: searchResults.length,
             itemBuilder: (context, index) {
-              final item = searchResults[index];
-              if (item['type'] == 'medicine') {
-                return _buildMedicineCard(item);
-              } else {
-                return _buildDeviceCard(item);
-              }
+              final product = searchResults[index];
+              return _buildProductCard(product);
             },
           ),
         ),
@@ -376,23 +306,13 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  Widget _buildMedicineCard(Map<String, dynamic> medicine) {
+  Widget _buildProductCard(Product product) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
-        // Navigate to Product Details
         onTap: () {
-          final product = Product(
-            id: medicine['Medicine Name'] ?? 'unknown_med',
-            name: medicine['Medicine Name'] ?? 'Unknown',
-            price: double.tryParse(medicine['Price']?.toString() ?? '0') ?? 0.0,
-            image: medicine['Image URL'] ?? '',
-            category: 'Medicine',
-            rating: 4.5, // Mock rating for CSV data
-          );
-
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => ProductPage(product: product)),
@@ -405,8 +325,10 @@ class _SearchPageState extends State<SearchPage> {
             children: [
               // Image
               SmartProductImage(
-                imageUrl: medicine['Image URL'],
-                category: medicine['Medicine Name'] ?? 'Medicine',
+                imageUrl: product.image.isNotEmpty ? product.image : null,
+                category: product.category.isNotEmpty
+                    ? product.category
+                    : product.name,
                 width: 80,
                 height: 80,
               ),
@@ -416,8 +338,28 @@ class _SearchPageState extends State<SearchPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (product.category.toLowerCase() == 'device')
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[50],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'DEVICE',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF2196F3),
+                          ),
+                        ),
+                      ),
                     Text(
-                      medicine['Medicine Name'] ?? 'Unknown',
+                      product.name,
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -428,7 +370,7 @@ class _SearchPageState extends State<SearchPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      medicine['Manufacturer'] ?? '',
+                      product.supplierName ?? 'Unknown Supplier',
                       style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -439,7 +381,7 @@ class _SearchPageState extends State<SearchPage> {
                         const Icon(Icons.star, size: 14, color: Colors.amber),
                         const SizedBox(width: 4),
                         Text(
-                          '${(medicine['Excellent Review %'] ?? 0) / 20}',
+                          '${product.rating}',
                           style: const TextStyle(
                             fontSize: 12,
                             color: Colors.grey,
@@ -447,7 +389,7 @@ class _SearchPageState extends State<SearchPage> {
                         ),
                         const Spacer(),
                         Text(
-                          '₹${medicine['Price'] ?? '0.00'}',
+                          '₹${product.price.toStringAsFixed(2)}',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -462,10 +404,7 @@ class _SearchPageState extends State<SearchPage> {
               // Wishlist button
               Consumer<WishlistService>(
                 builder: (context, wishlistService, child) {
-                  final medicineId =
-                      '${medicine['Medicine Name']}_${medicine['Manufacturer']}'
-                          .replaceAll(' ', '_');
-                  final isInWishlist = wishlistService.isInWishlist(medicineId);
+                  final isInWishlist = wishlistService.isInWishlist(product.id);
                   return IconButton(
                     icon: Icon(
                       isInWishlist ? Icons.favorite : Icons.favorite_border,
@@ -473,123 +412,19 @@ class _SearchPageState extends State<SearchPage> {
                     ),
                     onPressed: () {
                       if (isInWishlist) {
-                        wishlistService.removeFromWishlist(medicineId);
+                        wishlistService.removeFromWishlist(product.id);
                       } else {
                         final wishlistItem = WishlistItem(
-                          id: medicineId,
-                          name: medicine['Medicine Name'] ?? 'Unknown',
-                          price:
-                              double.tryParse(
-                                medicine['Price']?.toString() ?? '0',
-                              ) ??
-                              0.0,
-                          image: medicine['Image URL'] ?? '',
+                          id: product.id,
+                          name: product.name,
+                          price: product.price,
+                          image: product.image,
                         );
                         wishlistService.addToWishlist(wishlistItem);
                       }
                     },
                   );
                 },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDeviceCard(Map<String, dynamic> device) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        // Navigate to Product Details
-        onTap: () {
-          final product = Product(
-            id: device['Device_Name'] ?? 'unknown_device',
-            name: device['Device_Name'] ?? 'Unknown',
-            price: 0.0, // Devices in CSV might not have clear price
-            image: '', // Use fallback
-            category: 'Device',
-            rating: 4.5, // Mock
-          );
-
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => ProductPage(product: product)),
-          );
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              // Icon -> Smart Image
-              SmartProductImage(
-                imageUrl: null, // Devices might not have images in CSV
-                category: device['Device_Name'] ?? 'Device',
-                width: 80,
-                height: 80,
-              ),
-              const SizedBox(width: 12),
-              // Details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.blue[50],
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text(
-                        'DEVICE',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF2196F3),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      device['Device_Name'] ?? 'Unknown',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: Theme.of(context).textTheme.bodyLarge?.color,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      device['Manufacturer'] ?? '',
-                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (device['Model_Number'] != null &&
-                        device['Model_Number'].toString().isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          'Model: ${device['Model_Number']}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[500],
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
-                ),
               ),
             ],
           ),

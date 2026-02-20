@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
 
 // Internal Imports
 import '../profile/presentation/screens/supplier_category_page.dart';
@@ -29,6 +30,32 @@ class SupplierDashboard extends StatefulWidget {
 class _SupplierDashboardState extends State<SupplierDashboard> {
   int _selectedIndex = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    _syncOneSignalId();
+  }
+
+  Future<void> _syncOneSignalId() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+
+      final playerId = OneSignal.User.pushSubscription.id;
+      if (playerId != null && playerId.isNotEmpty) {
+        await Supabase.instance.client
+            .from('suppliers')
+            .update({'onesignal_player_id': playerId})
+            .eq('user_id', user.id);
+        debugPrint(
+          "Successfully synced OneSignal Player ID on dashboard load.",
+        );
+      }
+    } catch (e) {
+      debugPrint("Failed to sync OneSignal ID: $e");
+    }
+  }
+
   void _onItemTapped(int index) {
     if (index == 2) {
       Navigator.push(
@@ -39,8 +66,9 @@ class _SupplierDashboardState extends State<SupplierDashboard> {
       setState(() => _selectedIndex = index);
     }
   }
+
   late final List<Widget> _pages = [
-     SupplierDashboardHome(),
+    SupplierDashboardHome(),
     const SupplierCategoryPage(),
     const SizedBox(), // Placeholder for Add Product (handled by onTap)
     const SupplierOrdersPage(),
@@ -49,9 +77,6 @@ class _SupplierDashboardState extends State<SupplierDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    // Custom Bottom Bar with selected item color from theme or teal
-    const activeColor = Color(0xFF4CA6A8);
-
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
@@ -60,49 +85,101 @@ class _SupplierDashboardState extends State<SupplierDashboard> {
           child: _pages[_selectedIndex],
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: activeColor,
-        unselectedItemColor: Colors.grey,
-        showUnselectedLabels: true,
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        items: [
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.home_filled, size: 26),
-            label: "Home",
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.grid_view, size: 26),
-            label: "Category",
-          ),
-          BottomNavigationBarItem(
-            icon: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: const BoxDecoration(
-                color: activeColor,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 8,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.add, color: Colors.white, size: 24),
-            ),
-            label: "",
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.receipt_long, size: 26),
-            label: "Order",
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.inventory_2_outlined, size: 26),
-            label: "My Products",
+      bottomNavigationBar: _buildBottomNavigationBar(),
+    );
+  }
+
+  Widget _buildBottomNavigationBar() {
+    const activeColor = Color(0xFF4CA6A8);
+
+    final navItems = [
+      {'icon': Icons.home_filled, 'label': 'Home'},
+      {'icon': Icons.grid_view, 'label': 'Category'},
+      {'icon': Icons.add, 'label': 'Add'},
+      {'icon': Icons.receipt_long, 'label': 'Order'},
+      {'icon': Icons.inventory_2_outlined, 'label': 'Products'},
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
           ),
         ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(navItems.length, (index) {
+              final item = navItems[index];
+              return _buildNavItem(
+                item['icon'] as IconData,
+                item['label'] as String,
+                index,
+                activeColor,
+              );
+            }),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(
+    IconData icon,
+    String label,
+    int index,
+    Color activeColor,
+  ) {
+    final isSelected = _selectedIndex == index;
+
+    if (index == 2) {
+      // THE ADD BUTTON (FAB STYLE)
+      return GestureDetector(
+        onTap: () => _onItemTapped(index),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: activeColor,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: activeColor.withValues(alpha: 0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: const Icon(Icons.add, color: Colors.white, size: 26),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () => _onItemTapped(index),
+      child: Container(
+        color: Colors.transparent,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: isSelected ? activeColor : Colors.grey, size: 26),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? activeColor : Colors.grey,
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -124,20 +201,6 @@ class _SupplierDashboardHomeState extends State<SupplierDashboardHome> {
   bool _hasError = false;
   Map<String, dynamic>? _data;
 
-  double thisMonthRevenue = 0;
-  double growth = 0;
-  bool isLoadingRevenue = true;
-
-  int pendingOrders = 0;
-  bool isLoadingPending = true;
-
-  int totalOrders = 0;
-  int deliveredOrders = 0;
-  double avgOrderValue = 0;
-  String fulfillmentRate = "0";
-
-  int totalClients = 0;
-  bool isLoadingClients = true;
   // Mock Categories loading
   List<Map<String, dynamic>> _categories = [];
   bool _isCategoriesLoading = true;
@@ -152,13 +215,13 @@ class _SupplierDashboardHomeState extends State<SupplierDashboardHome> {
   void initState() {
     super.initState();
     _loadAllData();
-    fetchDashboardStats();
     // ⏲️ Set up a periodic refresh for backup (in case real-time fails)
     _refreshTimer = Timer.periodic(
-      const Duration(seconds: 15),
-          (_) => fetchDashboardStats(),
+      const Duration(seconds: 30),
+      (_) => _loadAllData(),
     );
   }
+
   @override
   void dispose() {
     _refreshTimer?.cancel();
@@ -166,138 +229,16 @@ class _SupplierDashboardHomeState extends State<SupplierDashboardHome> {
     _statsService.dispose();
     super.dispose();
   }
-  Future<void> fetchDashboardStats() async {
-    try {
-      final supabase = Supabase.instance.client;
-      final user = supabase.auth.currentUser;
-
-      if (user == null) {
-        print("USER NOT LOGGED IN");
-        return;
-      }
-      /// STEP 1: GET SUPPLIER ID
-      final supplier = await supabase
-          .from('suppliers')
-          .select('id')
-          .eq('user_id', user.id)
-          .single();
-
-      final supplierId = supplier['id'];
-
-      print("SUPPLIER ID: $supplierId");
-
-      /// STEP 2: FETCH ORDERS (MAIN SOURCE)
-      final List orders = await supabase
-          .from('orders')
-          .select('id, status, total_amount, user_id, created_at')
-          .eq('supplier_id', supplierId);
-
-      print("TOTAL ORDERS: ${orders.length}");
-
-      /// IMPORTANT: LOCAL VARIABLES USE KARO
-      int total = orders.length;
-
-      int delivered = orders
-          .where((o) =>
-      (o['status'] ?? '').toString().toLowerCase() == 'delivered')
-          .length;
-
-      int pending = orders
-          .where((o) =>
-      (o['status'] ?? '').toString().toLowerCase() != 'delivered')
-          .length;
-
-      print("Pending: $pending");
-      print("Delivered: $delivered");
-
-      /// Fulfillment Rate
-      String fulfillment =
-      total > 0 ? ((delivered / total) * 100).toStringAsFixed(0) : "0";
-
-      print("Fulfillment: $fulfillment");
-
-      /// Avg Order Value
-      double totalRevenueAll = 0;
-
-      for (var order in orders) {
-        totalRevenueAll += (order['total_amount'] ?? 0).toDouble();
-      }
-
-      double avgOrder =
-      total > 0 ? totalRevenueAll / total : 0;
-
-      print("AVG ORDER: $avgOrder");
-
-      /// Unique Customers
-      int customers =
-          orders.map((e) => e['user_id']).toSet().length;
-
-      print("Customers: $customers");
-
-      /// STEP 3: MONTHLY REVENUE FROM order_details
-      final List items = await supabase
-          .from('order_details')
-          .select('price, quantity, created_at')
-          .eq('supplier_id', supplierId);
-
-      final now = DateTime.now();
-
-      final startOfMonth = DateTime(now.year, now.month, 1);
-      final startOfNextMonth = DateTime(now.year, now.month + 1, 1);
-
-      double monthlyRevenue = 0;
-
-      for (var item in items) {
-        final date =
-        DateTime.parse(item['created_at']).toLocal();
-
-        if (date.isAfter(startOfMonth) &&
-            date.isBefore(startOfNextMonth)) {
-          monthlyRevenue +=
-              (item['price'] ?? 0) *
-                  (item['quantity'] ?? 0);
-        }
-      }
-
-      print("Monthly Revenue: $monthlyRevenue");
-
-      /// FINAL UPDATE UI STATE (ONLY ONCE)
-      if (!mounted) return;
-
-      setState(() {
-        totalOrders = total;
-        deliveredOrders = delivered;
-        pendingOrders = pending;
-        fulfillmentRate = fulfillment;
-        avgOrderValue = avgOrder;
-        totalClients = customers;
-        thisMonthRevenue = monthlyRevenue;
-
-        isLoadingRevenue = false;
-        isLoadingPending = false;
-        isLoadingClients = false;
-      });
-
-    } catch (e) {
-      print("DASHBOARD ERROR: $e");
-
-      if (mounted) {
-        setState(() {
-          isLoadingRevenue = false;
-          isLoadingPending = false;
-          isLoadingClients = false;
-        });
-      }
-    }
-  }
 
   Future<void> _loadAllData() async {
     // Only show full loading spinner for the first load
     if (_data == null) {
-      setState(() {
-        _isLoading = true;
-        _hasError = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+          _hasError = false;
+        });
+      }
     }
 
     try {
@@ -750,20 +691,21 @@ class _SupplierDashboardHomeState extends State<SupplierDashboardHome> {
     }
 
     // Extract all metrics from data
-    final revenue = thisMonthRevenue;
-    final revenueGrowth = growth;
-    final pending = pendingOrders;
-    final delivered = deliveredOrders;
-    final totalOrders = this.totalOrders;
-    final avgOrderValue = this.avgOrderValue;
+    final thisMonthRevenue =
+        (_data?['thisMonthRevenue'] as num?)?.toDouble() ?? 0.0;
+    final growth = (_data?['growth'] as num?)?.toDouble() ?? 0.0;
+    final pendingOrders = (_data?['pendingOrders'] as num?)?.toInt() ?? 0;
+    final deliveredOrders = (_data?['deliveredOrders'] as num?)?.toInt() ?? 0;
+    final totalOrdersCount = (_data?['totalOrders'] as num?)?.toInt() ?? 0;
+    final totalClients = (_data?['totalClients'] as num?)?.toInt() ?? 0;
+    final avgOrderValue = (_data?['avgOrderValue'] as num?)?.toDouble() ?? 0.0;
     final totalProducts = (_data?['totalProducts'] as num?)?.toInt() ?? 0;
     final lowStockCount = (_data?['lowStockCount'] as num?)?.toInt() ?? 0;
     final outOfStockCount = (_data?['outOfStockCount'] as num?)?.toInt() ?? 0;
 
     // Calculate fulfillment rate
-    final fulfillmentRate =
-    totalOrders > 0
-        ? ((delivered / totalOrders) * 100).toStringAsFixed(0)
+    final fulfillmentRate = totalOrdersCount > 0
+        ? ((deliveredOrders / totalOrdersCount) * 100).toStringAsFixed(0)
         : "0";
 
     return GridView.count(
@@ -778,44 +720,43 @@ class _SupplierDashboardHomeState extends State<SupplierDashboardHome> {
         _StatCard(
           title: "Revenue",
 
-          valueWidget: isLoadingRevenue
+          valueWidget: _isLoading
               ? const SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          )
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
               : AnimatedCurrencyCounter(
-            value: thisMonthRevenue,
-            style: const TextStyle(
-              color: Color(0xFF4CA6A8),
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-            compact: true,
-          ),
+                  value: thisMonthRevenue,
+                  style: const TextStyle(
+                    color: Color(0xFF4CA6A8),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                  compact: true,
+                ),
           subtitle: "This Month",
-          badge:
-          "${growth >= 0 ? '+' : ''}${growth.toStringAsFixed(1)}%",
+          badge: "${growth >= 0 ? '+' : ''}${growth.toStringAsFixed(1)}%",
           icon: Icons.currency_rupee,
           isAlert: false,
         ),
         // Pending Orders Card
         _StatCard(
           title: "Pending",
-          valueWidget: isLoadingPending
+          valueWidget: _isLoading
               ? const SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          )
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
               : Text(
-            "$pendingOrders Orders",
-            style: const TextStyle(
-              color: Color(0xFF4CA6A8),
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
+                  "$pendingOrders Orders",
+                  style: const TextStyle(
+                    color: Color(0xFF4CA6A8),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
           subtitle: "To Process",
           badge: pendingOrders > 0 ? "Action Needed" : "All Good",
           icon: Icons.schedule,
@@ -844,20 +785,18 @@ class _SupplierDashboardHomeState extends State<SupplierDashboardHome> {
         // Customers Card
         _StatCard(
           title: "Customers",
-          valueWidget: isLoadingClients
+          valueWidget: _isLoading
               ? const CircularProgressIndicator(strokeWidth: 2)
               : Text(
-            "$totalClients Clients",
-            style: const TextStyle(
-              color: Color(0xFF4CA6A8),
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
+                  "$totalClients Clients",
+                  style: const TextStyle(
+                    color: Color(0xFF4CA6A8),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
           subtitle: "Active Buyers",
-          badge: totalClients > 0
-              ? "Connected"
-              : "No Customers",
+          badge: totalClients > 0 ? "Connected" : "No Customers",
           icon: Icons.people,
           isAlert: false,
         ),
@@ -882,28 +821,19 @@ class _SupplierDashboardHomeState extends State<SupplierDashboardHome> {
         // Average Order Value Card
         _StatCard(
           title: "Avg Order",
-
-          valueWidget: AnimatedCurrencyCounter(
-            value: avgOrderValue,
+          valueWidget: Text(
+            "${avgOrderValue.toInt()} Orders",
             style: const TextStyle(
               color: Color(0xFF4CA6A8),
               fontWeight: FontWeight.bold,
               fontSize: 16,
             ),
-            compact: true,
           ),
-
           subtitle: "Per Transaction",
-
-          badge: totalOrders > 0
-              ? "$totalOrders Total"
-              : "No Data",
-
-          icon: Icons.currency_rupee,
-
+          badge: totalOrdersCount > 0 ? "$totalOrdersCount Total" : "No Data",
+          icon: Icons.receipt_long,
           isAlert: false,
         ),
-
       ],
     );
   }

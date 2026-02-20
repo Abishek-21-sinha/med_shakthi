@@ -21,9 +21,12 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
   String _selectedPaymentStatus = 'All';
   late AnimationController _animationController;
 
+  late Future<Map<String, dynamic>> _salesStatsFuture;
+
   @override
   void initState() {
     super.initState();
+    _salesStatsFuture = SalesStatsService().fetchSalesStats();
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -44,85 +47,95 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            // App Bar
-            SliverAppBar(
-              floating: true,
-              snap: true,
-              elevation: 0,
-              backgroundColor: theme.scaffoldBackgroundColor,
-              title: Text(
-                'Sales Analytics',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 24,
-                  color: theme.textTheme.bodyLarge?.color,
-                ),
-              ),
-              actions: [
-                IconButton(
-                  icon: Icon(
-                    Icons.filter_list_rounded,
-                    color: theme.iconTheme.color,
+        child: FutureBuilder<Map<String, dynamic>>(
+          future: _salesStatsFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(child: Text('Error: ${snapshot.error}'));
+            }
+            if (!snapshot.hasData) {
+              return const Center(child: Text('No data found.'));
+            }
+            final data = snapshot.data ?? {};
+
+            return CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                // App Bar
+                SliverAppBar(
+                  floating: true,
+                  snap: true,
+                  elevation: 0,
+                  backgroundColor: theme.scaffoldBackgroundColor,
+                  title: Text(
+                    'Sales Analytics',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 24,
+                      color: theme.textTheme.bodyLarge?.color,
+                    ),
                   ),
-                  onPressed: () => _showFilterBottomSheet(context),
+                  actions: [
+                    IconButton(
+                      icon: Icon(
+                        Icons.filter_list_rounded,
+                        color: theme.iconTheme.color,
+                      ),
+                      onPressed: () => _showFilterBottomSheet(context),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                 ),
-                const SizedBox(width: 8),
+
+                // Content
+                SliverPadding(
+                  padding: const EdgeInsets.all(16),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      // Date Range Selector
+                      _buildDateRangeSelector(isDark),
+                      const SizedBox(height: 20),
+
+                      // Sales Summary Cards
+                      _buildSalesSummaryCards(isDark, data),
+                      const SizedBox(height: 24),
+
+                      // Filter Chips
+                      _buildFilterChips(isDark),
+                      const SizedBox(height: 24),
+
+                      // Sales Trend Chart
+                      _buildSectionTitle('Sales Trend', isDark),
+                      const SizedBox(height: 16),
+                      _buildSalesTrendChart(isDark, data),
+                      const SizedBox(height: 24),
+
+                      // Category-wise Sales
+                      _buildSectionTitle('Category Performance', isDark),
+                      const SizedBox(height: 16),
+                      _buildCategoryBarChart(isDark, data),
+                      const SizedBox(height: 24),
+
+                      // Top Selling Medicines
+                      _buildSectionTitle('Top Selling Products', isDark),
+                      const SizedBox(height: 16),
+                      _buildTopSellingList(isDark, data),
+                      const SizedBox(height: 24),
+
+                      // Sales Details Table
+                      _buildSectionTitle('Recent Transactions', isDark),
+                      const SizedBox(height: 16),
+                      _buildSalesDetailsTable(isDark, data),
+                      const SizedBox(height: 100),
+                    ]),
+                  ),
+                ),
               ],
-            ),
-
-            // Content
-            SliverPadding(
-              padding: const EdgeInsets.all(16),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  // Date Range Selector
-                  _buildDateRangeSelector(isDark),
-                  const SizedBox(height: 20),
-
-                  // Sales Summary Cards
-                  _buildSalesSummaryCards(isDark),
-                  const SizedBox(height: 24),
-
-                  // Filter Chips
-                  _buildFilterChips(isDark),
-                  const SizedBox(height: 24),
-
-                  // Sales Trend Chart
-                  _buildSectionTitle('Sales Trend', isDark),
-                  const SizedBox(height: 16),
-                  _buildSalesTrendChart(isDark),
-                  const SizedBox(height: 24),
-
-                  // Category-wise Sales
-                  _buildSectionTitle('Category Performance', isDark),
-                  const SizedBox(height: 16),
-                  _buildCategoryBarChart(isDark),
-                  const SizedBox(height: 24),
-
-                  // Payment Status Breakdown
-                  _buildSectionTitle('Payment Status', isDark),
-                  const SizedBox(height: 16),
-                  _buildPaymentDonutChart(isDark),
-                  const SizedBox(height: 24),
-
-                  // Top Selling Medicines
-                  _buildSectionTitle('Top Selling Products', isDark),
-                  const SizedBox(height: 16),
-                  _buildTopSellingList(isDark),
-                  const SizedBox(height: 24),
-
-                  // Sales Details Table
-                  _buildSectionTitle('Recent Transactions', isDark),
-                  const SizedBox(height: 16),
-                  _buildSalesDetailsTable(isDark),
-                  const SizedBox(height: 100),
-                ]),
-              ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -150,9 +163,15 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
           return Expanded(
             child: GestureDetector(
               onTap: () {
-                setState(() => _selectedDateRange = range);
                 if (range == 'Custom') {
                   _showDateRangePicker(context);
+                } else {
+                  setState(() {
+                    _selectedDateRange = range;
+                    _salesStatsFuture = SalesStatsService().fetchSalesStats(
+                      dateRange: _selectedDateRange,
+                    );
+                  });
                 }
               },
               child: AnimatedContainer(
@@ -189,63 +208,53 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
     );
   }
 
-  Widget _buildSalesSummaryCards(bool isDark) {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: SalesStatsService().fetchSalesStats(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+  Widget _buildSalesSummaryCards(bool isDark, Map<String, dynamic> data) {
+    final revenue = data['totalRevenue'] ?? 0.0;
+    final orders = data['totalOrders'] ?? 0;
+    final pending = data['pendingOrders'] ?? 0;
+    final growth = data['growth'] ?? 0.0;
 
-        final data = snapshot.data ?? {};
-        final revenue = data['totalRevenue'] ?? 0.0;
-        final orders = data['totalOrders'] ?? 0;
-        final pending = data['pendingOrders'] ?? 0;
-        final growth = data['growth'] ?? 0.0;
-
-        return GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: 1.4,
-          children: [
-            _buildSummaryCard(
-              'Total Revenue',
-              '₹${revenue.toStringAsFixed(0)}',
-              '+$growth%',
-              Icons.trending_up_rounded,
-              const Color(0xFF4CA6A8),
-              isDark,
-            ),
-            _buildSummaryCard(
-              'Total Orders',
-              '$orders',
-              '+8%', // Placeholder for orders growth
-              Icons.shopping_bag_rounded,
-              const Color(0xFF6366F1),
-              isDark,
-            ),
-            _buildSummaryCard(
-              'Profit Growth',
-              '$growth%',
-              '+$growth%',
-              Icons.show_chart_rounded,
-              const Color(0xFF10B981),
-              isDark,
-            ),
-            _buildSummaryCard(
-              'Pending Orders',
-              '$pending',
-              '-3%', // Placeholder
-              Icons.pending_actions_rounded,
-              const Color(0xFFF59E0B),
-              isDark,
-            ),
-          ],
-        );
-      },
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      crossAxisSpacing: 16,
+      mainAxisSpacing: 16,
+      childAspectRatio: 1.4,
+      children: [
+        _buildSummaryCard(
+          'Total Revenue',
+          '₹${revenue.toStringAsFixed(0)}',
+          '+$growth%',
+          Icons.trending_up_rounded,
+          const Color(0xFF4CA6A8),
+          isDark,
+        ),
+        _buildSummaryCard(
+          'Total Orders',
+          '$orders',
+          'Count',
+          Icons.shopping_bag_rounded,
+          const Color(0xFF6366F1),
+          isDark,
+        ),
+        _buildSummaryCard(
+          'Profit Growth',
+          '$growth%',
+          '+$growth%',
+          Icons.show_chart_rounded,
+          const Color(0xFF10B981),
+          isDark,
+        ),
+        _buildSummaryCard(
+          'Pending Orders',
+          '$pending',
+          'Needs Action',
+          Icons.pending_actions_rounded,
+          const Color(0xFFF59E0B),
+          isDark,
+        ),
+      ],
     );
   }
 
@@ -418,7 +427,27 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
     );
   }
 
-  Widget _buildSalesTrendChart(bool isDark) {
+  Widget _buildSalesTrendChart(bool isDark, Map<String, dynamic> data) {
+    final List<Map<String, dynamic>> salesTrend =
+        (data['salesTrend'] as List<dynamic>?)
+            ?.map((e) => Map<String, dynamic>.from(e as Map))
+            .toList() ??
+        [];
+
+    if (salesTrend.isEmpty) {
+      return Container(
+        height: 280,
+        alignment: Alignment.center,
+        child: const Text('No data available'),
+      );
+    }
+
+    double maxY = salesTrend
+        .map((e) => (e['value'] as num).toDouble())
+        .reduce((curr, next) => curr > next ? curr : next);
+    if (maxY < 10) maxY = 10; // Minimum Y axis
+    maxY *= 1.2; // Add some headroom
+
     return Container(
       height: 280,
       padding: const EdgeInsets.all(20),
@@ -440,7 +469,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
           gridData: FlGridData(
             show: true,
             drawVerticalLine: false,
-            horizontalInterval: 2,
+            horizontalInterval: maxY / 5 > 0 ? maxY / 5 : 1,
             getDrawingHorizontalLine: (value) {
               return FlLine(
                 color: isDark
@@ -454,13 +483,27 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
             leftTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
-                reservedSize: 40,
+                reservedSize: 45,
                 getTitlesWidget: (value, meta) {
+                  // Don't show max/min edge values if they overlap
+                  if (value == meta.max || value == meta.min) {
+                    return const SizedBox.shrink();
+                  }
+
+                  String text;
+                  if (value >= 100000) {
+                    text = '₹${(value / 100000).toStringAsFixed(1)}L';
+                  } else if (value >= 1000) {
+                    text = '₹${(value / 1000).toStringAsFixed(1)}k';
+                  } else {
+                    text = '₹${value.toInt()}';
+                  }
+
                   return Text(
-                    '₹${value.toInt()}L',
+                    text,
                     style: TextStyle(
                       color: isDark ? Colors.white60 : Colors.black54,
-                      fontSize: 11,
+                      fontSize: 10,
                     ),
                   );
                 },
@@ -470,20 +513,25 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
               sideTitles: SideTitles(
                 showTitles: true,
                 getTitlesWidget: (value, meta) {
-                  const days = [
-                    'Mon',
-                    'Tue',
-                    'Wed',
-                    'Thu',
-                    'Fri',
-                    'Sat',
-                    'Sun',
-                  ];
-                  if (value.toInt() >= 0 && value.toInt() < days.length) {
+                  // Only show labels for integer values to avoid duplicate labels
+                  if (value != value.toInt()) {
+                    return const SizedBox.shrink();
+                  }
+
+                  int idx = value.toInt();
+                  if (idx >= 0 && idx < salesTrend.length) {
+                    // For 30 days, we might want to skip some labels to avoid crowding
+                    if (salesTrend.length > 15 &&
+                        idx % 3 != 0 &&
+                        idx != salesTrend.length - 1 &&
+                        idx != 0) {
+                      return const SizedBox.shrink();
+                    }
+
                     return Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
-                        days[value.toInt()],
+                        salesTrend[idx]['label'] as String,
                         style: TextStyle(
                           color: isDark ? Colors.white60 : Colors.black54,
                           fontSize: 11,
@@ -491,7 +539,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                       ),
                     );
                   }
-                  return const SizedBox();
+                  return const SizedBox.shrink();
                 },
               ),
             ),
@@ -504,20 +552,18 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
           ),
           borderData: FlBorderData(show: false),
           minX: 0,
-          maxX: 6,
+          maxX: (salesTrend.length - 1).toDouble(),
           minY: 0,
-          maxY: 10,
+          maxY: maxY,
           lineBarsData: [
             LineChartBarData(
-              spots: const [
-                FlSpot(0, 3),
-                FlSpot(1, 5),
-                FlSpot(2, 4),
-                FlSpot(3, 7),
-                FlSpot(4, 6),
-                FlSpot(5, 8),
-                FlSpot(6, 9),
-              ],
+              spots: List.generate(
+                salesTrend.length,
+                (index) => FlSpot(
+                  index.toDouble(),
+                  (salesTrend[index]['value'] as num).toDouble(),
+                ),
+              ),
               isCurved: true,
               gradient: const LinearGradient(
                 colors: [Color(0xFF63B4B7), Color(0xFF4CA6A8)],
@@ -528,9 +574,9 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                 show: true,
                 getDotPainter: (spot, percent, barData, index) {
                   return FlDotCirclePainter(
-                    radius: 6,
+                    radius: 4,
                     color: Colors.white,
-                    strokeWidth: 3,
+                    strokeWidth: 2,
                     strokeColor: const Color(0xFF4CA6A8),
                   );
                 },
@@ -553,7 +599,36 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
     );
   }
 
-  Widget _buildCategoryBarChart(bool isDark) {
+  Widget _buildCategoryBarChart(bool isDark, Map<String, dynamic> data) {
+    final Map<String, double> categoryMap =
+        (data['categoryPerformance'] as Map<String, dynamic>?)?.map(
+          (key, value) => MapEntry(key, (value as num).toDouble()),
+        ) ??
+        {};
+
+    // We map categories to these fixed 4 slots for simplicity, or we can use dynamic slots
+    // For now, let's take the top 4 categories
+    final sortedCategories = categoryMap.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final List<String> topCategoryNames = [];
+    final List<double> topCategoryValues = [];
+
+    for (int i = 0; i < 4; i++) {
+      if (i < sortedCategories.length) {
+        topCategoryNames.add(sortedCategories[i].key);
+        topCategoryValues.add(sortedCategories[i].value);
+      } else {
+        topCategoryNames.add('N/A');
+        topCategoryValues.add(0);
+      }
+    }
+
+    double maxY = topCategoryValues.isEmpty
+        ? 10
+        : topCategoryValues.reduce((curr, next) => curr > next ? curr : next);
+    if (maxY < 10) maxY = 10;
+    maxY *= 1.2;
+
     return Container(
       height: 300,
       padding: const EdgeInsets.all(20),
@@ -573,14 +648,14 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
       child: BarChart(
         BarChartData(
           alignment: BarChartAlignment.spaceAround,
-          maxY: 10,
+          maxY: maxY,
           barTouchData: BarTouchData(
             enabled: true,
             touchTooltipData: BarTouchTooltipData(
               getTooltipColor: (group) => const Color(0xFF4CA6A8),
               getTooltipItem: (group, groupIndex, rod, rodIndex) {
                 return BarTooltipItem(
-                  '₹${rod.toY.toInt()}L',
+                  '₹${rod.toY.toInt()}',
                   const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -593,13 +668,26 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
             leftTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
-                reservedSize: 40,
+                reservedSize: 45,
                 getTitlesWidget: (value, meta) {
+                  if (value == meta.max || value == meta.min) {
+                    return const SizedBox.shrink();
+                  }
+
+                  String text;
+                  if (value >= 100000) {
+                    text = '₹${(value / 100000).toStringAsFixed(1)}L';
+                  } else if (value >= 1000) {
+                    text = '₹${(value / 1000).toStringAsFixed(1)}k';
+                  } else {
+                    text = '₹${value.toInt()}';
+                  }
+
                   return Text(
-                    '₹${value.toInt()}L',
+                    text,
                     style: TextStyle(
                       color: isDark ? Colors.white60 : Colors.black54,
-                      fontSize: 11,
+                      fontSize: 10,
                     ),
                   );
                 },
@@ -609,20 +697,20 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
               sideTitles: SideTitles(
                 showTitles: true,
                 getTitlesWidget: (value, meta) {
-                  const categories = [
-                    'Medicines',
-                    'Supplements',
-                    'Devices',
-                    'Others',
-                  ];
-                  if (value.toInt() >= 0 && value.toInt() < categories.length) {
+                  if (value.toInt() >= 0 &&
+                      value.toInt() < topCategoryNames.length) {
+                    String name = topCategoryNames[value.toInt()];
+                    if (name.length > 10) {
+                      name =
+                          '${name.substring(0, 8)}...'; // Truncate long names
+                    }
                     return Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
-                        categories[value.toInt()],
+                        name,
                         style: TextStyle(
                           color: isDark ? Colors.white60 : Colors.black54,
-                          fontSize: 11,
+                          fontSize: 10,
                         ),
                       ),
                     );
@@ -641,7 +729,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
           gridData: FlGridData(
             show: true,
             drawVerticalLine: false,
-            horizontalInterval: 2,
+            horizontalInterval: maxY / 5 > 0 ? maxY / 5 : 1,
             getDrawingHorizontalLine: (value) {
               return FlLine(
                 color: isDark
@@ -653,10 +741,10 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
           ),
           borderData: FlBorderData(show: false),
           barGroups: [
-            _buildBarGroup(0, 7, const Color(0xFF4CA6A8)),
-            _buildBarGroup(1, 5, const Color(0xFF6366F1)),
-            _buildBarGroup(2, 3, const Color(0xFF10B981)),
-            _buildBarGroup(3, 2, const Color(0xFFF59E0B)),
+            _buildBarGroup(0, topCategoryValues[0], const Color(0xFF4CA6A8)),
+            _buildBarGroup(1, topCategoryValues[1], const Color(0xFF6366F1)),
+            _buildBarGroup(2, topCategoryValues[2], const Color(0xFF10B981)),
+            _buildBarGroup(3, topCategoryValues[3], const Color(0xFFF59E0B)),
           ],
         ),
       ),
@@ -674,156 +762,39 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
             begin: Alignment.bottomCenter,
             end: Alignment.topCenter,
           ),
-          width: 40,
+          width: 30, // Make slightly narrower to fit text
           borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
         ),
       ],
     );
   }
 
-  Widget _buildPaymentDonutChart(bool isDark) {
-    return Container(
-      height: 320,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.3)
-                : Colors.black.withValues(alpha: 0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 3,
-            child: PieChart(
-              PieChartData(
-                sectionsSpace: 4,
-                centerSpaceRadius: 60,
-                sections: [
-                  PieChartSectionData(
-                    value: 68,
-                    title: '68%',
-                    color: const Color(0xFF10B981),
-                    radius: 60,
-                    titleStyle: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  PieChartSectionData(
-                    value: 22,
-                    title: '22%',
-                    color: const Color(0xFFF59E0B),
-                    radius: 60,
-                    titleStyle: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  PieChartSectionData(
-                    value: 10,
-                    title: '10%',
-                    color: const Color(0xFFEF4444),
-                    radius: 60,
-                    titleStyle: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildLegendItem(
-                  'Paid',
-                  '₹6.1L',
-                  const Color(0xFF10B981),
-                  isDark,
-                ),
-                const SizedBox(height: 12),
-                _buildLegendItem(
-                  'Pending',
-                  '₹2.0L',
-                  const Color(0xFFF59E0B),
-                  isDark,
-                ),
-                const SizedBox(height: 12),
-                _buildLegendItem(
-                  'Failed',
-                  '₹0.9L',
-                  const Color(0xFFEF4444),
-                  isDark,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildTopSellingList(bool isDark, Map<String, dynamic> data) {
+    var productsRaw = data['topProducts'] as List<dynamic>? ?? [];
 
-  Widget _buildLegendItem(
-    String label,
-    String value,
-    Color color,
-    bool isDark,
-  ) {
-    return Row(
-      children: [
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark ? Colors.white70 : Colors.black54,
-              ),
-            ),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : Colors.black87,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
+    int maxSales = productsRaw.isEmpty
+        ? 1
+        : productsRaw
+              .map((p) => p['sales'] as int)
+              .reduce((a, b) => a > b ? a : b);
+    if (maxSales == 0) maxSales = 1;
 
-  Widget _buildTopSellingList(bool isDark) {
-    final products = [
-      {'name': 'Paracetamol 500mg', 'revenue': '₹1.2L', 'percentage': 0.85},
-      {'name': 'Vitamin D3 Capsules', 'revenue': '₹0.9L', 'percentage': 0.70},
-      {'name': 'Amoxicillin 250mg', 'revenue': '₹0.7L', 'percentage': 0.55},
-      {'name': 'Omega-3 Fish Oil', 'revenue': '₹0.5L', 'percentage': 0.40},
-      {'name': 'Multivitamin Tablets', 'revenue': '₹0.4L', 'percentage': 0.30},
-    ];
+    final products = productsRaw.map((p) {
+      double revenue =
+          (p['price'] as num).toDouble() * (p['sales'] as num).toDouble();
+
+      String formatAmt(double amt) {
+        if (amt >= 100000) return '₹${(amt / 100000).toStringAsFixed(1)}L';
+        if (amt >= 1000) return '₹${(amt / 1000).toStringAsFixed(1)}k';
+        return '₹${amt.toInt()}';
+      }
+
+      return {
+        'name': p['name'].toString(),
+        'revenue': formatAmt(revenue),
+        'percentage': (p['sales'] as num).toDouble() / maxSales,
+      };
+    }).toList();
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -941,41 +912,12 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
     );
   }
 
-  Widget _buildSalesDetailsTable(bool isDark) {
-    final transactions = [
-      {
-        'id': '#ORD-1247',
-        'medicine': 'Paracetamol 500mg',
-        'qty': '120',
-        'amount': '₹12,400',
-        'status': 'Paid',
-        'date': '09 Feb 2026',
-      },
-      {
-        'id': '#ORD-1246',
-        'medicine': 'Vitamin D3',
-        'qty': '80',
-        'amount': '₹8,900',
-        'status': 'Pending',
-        'date': '08 Feb 2026',
-      },
-      {
-        'id': '#ORD-1245',
-        'medicine': 'Amoxicillin',
-        'qty': '60',
-        'amount': '₹7,200',
-        'status': 'Paid',
-        'date': '08 Feb 2026',
-      },
-      {
-        'id': '#ORD-1244',
-        'medicine': 'Omega-3',
-        'qty': '45',
-        'amount': '₹5,400',
-        'status': 'Failed',
-        'date': '07 Feb 2026',
-      },
-    ];
+  Widget _buildSalesDetailsTable(bool isDark, Map<String, dynamic> data) {
+    final transactionsRaw = data['recentTransactions'] as List<dynamic>? ?? [];
+    final List<Map<String, String>> transactions = transactionsRaw.map((e) {
+      final map = e as Map<String, dynamic>;
+      return map.map((key, value) => MapEntry(key, value.toString()));
+    }).toList();
 
     return Container(
       decoration: BoxDecoration(
@@ -1187,21 +1129,36 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: transaction['status'] == 'Paid'
+                          color:
+                              transaction['status']!.toLowerCase() == 'paid' ||
+                                  transaction['status']!.toLowerCase() ==
+                                      'success' ||
+                                  transaction['status']!.toLowerCase() ==
+                                      'completed'
                               ? const Color(0xFF10B981).withValues(alpha: 0.1)
-                              : transaction['status'] == 'Pending'
+                              : transaction['status']!.toLowerCase() ==
+                                    'pending'
                               ? const Color(0xFFF59E0B).withValues(alpha: 0.1)
                               : const Color(0xFFEF4444).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          transaction['status']!,
+                          // Capitalize first letter of status
+                          transaction['status']![0].toUpperCase() +
+                              transaction['status']!.substring(1),
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
-                            color: transaction['status'] == 'Paid'
+                            color:
+                                transaction['status']!.toLowerCase() ==
+                                        'paid' ||
+                                    transaction['status']!.toLowerCase() ==
+                                        'success' ||
+                                    transaction['status']!.toLowerCase() ==
+                                        'completed'
                                 ? const Color(0xFF10B981)
-                                : transaction['status'] == 'Pending'
+                                : transaction['status']!.toLowerCase() ==
+                                      'pending'
                                 ? const Color(0xFFF59E0B)
                                 : const Color(0xFFEF4444),
                           ),
@@ -1342,13 +1299,36 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
     );
   }
 
-  void _showDateRangePicker(BuildContext context) {
-    // Implement custom date range picker
-    showDateRangePicker(
+  Future<void> _showDateRangePicker(BuildContext context) async {
+    final DateTimeRange? picked = await showDateRangePicker(
       context: context,
-      firstDate: DateTime(2020),
+      firstDate: DateTime(2000),
       lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(
+              context,
+            ).colorScheme.copyWith(primary: const Color(0xFF4CA6A8)),
+          ),
+          child: child!,
+        );
+      },
     );
+
+    if (picked != null) {
+      if (!mounted) return;
+      setState(() {
+        _selectedDateRange = 'Custom';
+        _salesStatsFuture = SalesStatsService().fetchSalesStats(
+          dateRange: 'Custom',
+          customStartDate: picked.start,
+          customEndDate: picked.end,
+        );
+      });
+    } else {
+      // If user cancelled, maybe revert to previous range if needed, or do nothing
+    }
   }
 
   void _showCategoryFilter(BuildContext context) {
@@ -1378,7 +1358,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
       }
 
       // Convert to CSV
-      String csvData = const ListToCsvConverter().convert(rows);
+      String csvData = csv.encode(rows);
 
       // Save in app directory (NO PERMISSION REQUIRED)
       final directory = await getApplicationDocumentsDirectory();

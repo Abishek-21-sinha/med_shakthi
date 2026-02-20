@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:med_shakthi/src/features/supplier/inventory/ui/add_product_page.dart';
 import 'package:med_shakthi/src/features/products/data/models/product_model.dart';
-import 'package:med_shakthi/src/features/products/presentation/screens/product_page.dart';
+import 'package:med_shakthi/src/features/supplier/inventory/ui/supplier_product_details_page.dart';
 
 class SupplierCategoryPage extends StatefulWidget {
   const SupplierCategoryPage({super.key});
@@ -288,12 +288,14 @@ class _SupplierCategoryPageState extends State<SupplierCategoryPage> {
                                       supplierId: product['supplier_id'],
                                     );
 
-                                    // Navigate to ProductPage to VIEW product (not edit)
+                                    // Navigate to SupplierProductDetailsPage to VIEW product
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
                                         builder: (_) =>
-                                            ProductPage(product: productModel),
+                                            SupplierProductDetailsPage(
+                                              product: productModel,
+                                            ),
                                       ),
                                     );
                                   },
