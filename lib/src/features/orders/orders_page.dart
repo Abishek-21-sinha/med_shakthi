@@ -230,7 +230,8 @@ class _OrdersPageState extends State<OrdersPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  "Order #${orderGroupId.isEmpty ? "N/A" : orderGroupId.substring(0, 8)}",
+                  firstOrder["order_number"]?.toString() ??
+                      "Order #${orderGroupId.isEmpty ? "N/A" : "ORD-${orderGroupId.substring(0, 8).toUpperCase()}"}",
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,

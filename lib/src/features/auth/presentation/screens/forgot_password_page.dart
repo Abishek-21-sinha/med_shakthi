@@ -58,50 +58,25 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFE9F6F4), // mint top
-              Color(0xFFF7FBFA), // off-white bottom
-            ],
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back_ios_new,
+            color: Theme.of(context).appBarTheme.foregroundColor,
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildTopBar(context),
-              Expanded(
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: _buildCard(),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          onPressed: () => Navigator.pop(context),
         ),
       ),
-    );
-  }
-
-  // 🔙 Top bar
-  Widget _buildTopBar(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.black),
-            onPressed: () => Navigator.pop(context),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: _buildCard(),
           ),
-          const Spacer(),
-        ],
+        ),
       ),
     );
   }
@@ -109,43 +84,54 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   // 📦 Card UI
   Widget _buildCard() {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF4C8077).withValues(alpha: 0.15),
-            blurRadius: 25,
-            offset: const Offset(0, 12),
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.lock_reset_rounded,
-            size: 48,
-            color: Color(0xFF6A3CBC),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF00B894).withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.lock_reset_rounded,
+              size: 48,
+              color: Color(0xFF00B894),
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          const Text(
+          Text(
             'Forgot Password?',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).textTheme.bodyLarge?.color,
+            ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
 
           const Text(
             'Enter your email and we will send you\ninstructions to reset your password.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, color: Colors.grey),
+            style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.5),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
 
           _emailField(),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
 
           _sendButton(),
         ],
@@ -158,22 +144,24 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     return TextField(
       controller: _emailController,
       keyboardType: TextInputType.emailAddress,
+      style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
       decoration: InputDecoration(
-        hintText: 'Email',
-        prefixIcon: const Icon(Icons.email_outlined),
+        hintText: 'Email Address',
+        hintStyle: const TextStyle(color: Colors.grey),
+        prefixIcon: const Icon(Icons.email_outlined, color: Colors.grey),
         filled: true,
-        fillColor: Colors.white,
+        fillColor: Theme.of(context).scaffoldBackgroundColor,
         contentPadding: const EdgeInsets.symmetric(
           vertical: 16,
           horizontal: 16,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.orange.shade400, width: 1.5),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFF4C8077), width: 2),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFF00B894), width: 1.5),
         ),
       ),
     );
@@ -183,10 +171,12 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   Widget _sendButton() {
     return SizedBox(
       width: double.infinity,
-      height: 52,
+      height: 54,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF00B3A4),
+          backgroundColor: const Color(0xFF00B894),
+          foregroundColor: Colors.white,
+          elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -194,10 +184,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         onPressed: _isLoading ? null : _sendResetLink,
         child: _isLoading
             ? const SizedBox(
-                height: 22,
-                width: 22,
+                height: 24,
+                width: 24,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2,
+                  strokeWidth: 2.5,
                   color: Colors.white,
                 ),
               )
@@ -206,7 +196,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black,
+                  letterSpacing: 0.5,
                 ),
               ),
       ),

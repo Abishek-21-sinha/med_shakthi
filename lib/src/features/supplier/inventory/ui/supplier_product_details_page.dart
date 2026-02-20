@@ -18,6 +18,30 @@ class _SupplierProductDetailsPageState
     extends State<SupplierProductDetailsPage> {
   final SupabaseClient supabase = Supabase.instance.client;
   bool _isLoading = false;
+  bool _isOwner = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkOwnership();
+  }
+
+  Future<void> _checkOwnership() async {
+    final user = supabase.auth.currentUser;
+    if (user != null) {
+      final supplier = await supabase
+          .from('suppliers')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      if (mounted && supplier != null) {
+        setState(() {
+          _isOwner = widget.product.supplierId == supplier['id'];
+        });
+      }
+    }
+  }
 
   Future<void> _deleteProduct() async {
     final confirm = await showDialog<bool>(
@@ -61,13 +85,8 @@ class _SupplierProductDetailsPageState
   }
 
   void _navigateToEdit() async {
-    // Convert Product model back to Map for AddProductPage (legacy compatibility)
     final productMap = widget.product.toMap();
-    // Add missing fields if necessary for editing
     productMap['image_url'] = widget.product.image;
-
-    // We might need to fetch the full product details if some fields are missing from the model
-    // But for now, let's try with what we have. AddProductPage expects a Map.
 
     final result = await Navigator.push(
       context,
@@ -75,9 +94,6 @@ class _SupplierProductDetailsPageState
     );
 
     if (result == true && mounted) {
-      // Refresh details? Or just pop?
-      // Since we don't reload the product here, we might want to pop or fetch fresh.
-      // For simplicity, let's pop with 'true' to force refresh on parent list.
       Navigator.pop(context, true);
     }
   }
@@ -93,7 +109,11 @@ class _SupplierProductDetailsPageState
       body: SafeArea(
         child: Column(
           children: [
-            _TopBar(onEdit: _navigateToEdit, onDelete: _deleteProduct),
+            _TopBar(
+              onEdit: _navigateToEdit,
+              onDelete: _deleteProduct,
+              isOwner: _isOwner,
+            ),
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
@@ -109,7 +129,9 @@ class _SupplierProductDetailsPageState
           ],
         ),
       ),
-      bottomNavigationBar: _BottomAction(onEdit: _navigateToEdit),
+      bottomNavigationBar: _isOwner
+          ? _BottomAction(onEdit: _navigateToEdit)
+          : null,
     );
   }
 }
@@ -119,8 +141,13 @@ class _SupplierProductDetailsPageState
 class _TopBar extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final bool isOwner;
 
-  const _TopBar({required this.onEdit, required this.onDelete});
+  const _TopBar({
+    required this.onEdit,
+    required this.onDelete,
+    required this.isOwner,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -149,14 +176,18 @@ class _TopBar extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.edit, color: Colors.blue),
-            onPressed: onEdit,
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete, color: Colors.red),
-            onPressed: onDelete,
-          ),
+          if (isOwner) ...[
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.blue),
+              onPressed: onEdit,
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: onDelete,
+            ),
+          ] else ...[
+            Icon(Icons.share, color: Theme.of(context).iconTheme.color),
+          ],
         ],
       ),
     );

@@ -49,9 +49,6 @@ class _SupplierDashboardState extends State<SupplierDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    // Custom Bottom Bar with selected item color from theme or teal
-    const activeColor = Color(0xFF4CA6A8);
-
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
@@ -60,49 +57,101 @@ class _SupplierDashboardState extends State<SupplierDashboard> {
           child: _pages[_selectedIndex],
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: activeColor,
-        unselectedItemColor: Colors.grey,
-        showUnselectedLabels: true,
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        items: [
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.home_filled, size: 26),
-            label: "Home",
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.grid_view, size: 26),
-            label: "Category",
-          ),
-          BottomNavigationBarItem(
-            icon: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: const BoxDecoration(
-                color: activeColor,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 8,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.add, color: Colors.white, size: 24),
-            ),
-            label: "",
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.receipt_long, size: 26),
-            label: "Order",
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.inventory_2_outlined, size: 26),
-            label: "My Products",
+      bottomNavigationBar: _buildBottomNavigationBar(),
+    );
+  }
+
+  Widget _buildBottomNavigationBar() {
+    const activeColor = Color(0xFF4CA6A8);
+
+    final navItems = [
+      {'icon': Icons.home_filled, 'label': 'Home'},
+      {'icon': Icons.grid_view, 'label': 'Category'},
+      {'icon': Icons.add, 'label': 'Add'},
+      {'icon': Icons.receipt_long, 'label': 'Order'},
+      {'icon': Icons.inventory_2_outlined, 'label': 'Products'},
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
           ),
         ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(navItems.length, (index) {
+              final item = navItems[index];
+              return _buildNavItem(
+                item['icon'] as IconData,
+                item['label'] as String,
+                index,
+                activeColor,
+              );
+            }),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(
+    IconData icon,
+    String label,
+    int index,
+    Color activeColor,
+  ) {
+    final isSelected = _selectedIndex == index;
+
+    if (index == 2) {
+      // THE ADD BUTTON (FAB STYLE)
+      return GestureDetector(
+        onTap: () => _onItemTapped(index),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: activeColor,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: activeColor.withValues(alpha: 0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: const Icon(Icons.add, color: Colors.white, size: 26),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () => _onItemTapped(index),
+      child: Container(
+        color: Colors.transparent,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: isSelected ? activeColor : Colors.grey, size: 26),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? activeColor : Colors.grey,
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

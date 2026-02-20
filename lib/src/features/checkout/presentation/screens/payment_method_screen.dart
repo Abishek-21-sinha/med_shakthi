@@ -158,7 +158,7 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
         // Calculate total
         final supplierSubtotal = items.fold(
           0.0,
-              (sum, item) => sum + (item.price * item.quantity),
+          (sum, item) => sum + (item.price * item.quantity),
         );
         final supplierTotal = supplierSubtotal + shipping;
 
@@ -166,16 +166,16 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
         final order = await supabase
             .from('orders')
             .insert({
-          "user_id": user.id,
-          "order_group_id": orderGroupId,
-          "supplier_id": supplierId,
-          "total_amount": supplierTotal,
-          "shipping": shipping,
-          "shipping_address": deliveryAddressText,
-          "status": "pending",
-          "payment_status": "pending",
-          "payment_method_id": paymentStore.selectedMethodId,
-        })
+              "user_id": user.id,
+              "order_group_id": orderGroupId,
+              "supplier_id": supplierId,
+              "total_amount": supplierTotal,
+              "shipping": shipping,
+              "shipping_address": deliveryAddressText,
+              "status": "pending",
+              "payment_status": "pending",
+              "payment_method_id": paymentStore.selectedMethodId,
+            })
             .select()
             .single();
 
@@ -200,19 +200,18 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
 
         // CALL EDGE FUNCTION HERE (AFTER INSERT)
         if (supplierId != null) {
-          // final session = supabase.auth.currentSession;
-          print("Calling Edge Function for supplier: $supplierId");
-
-          await supabase.functions.invoke(
-            'send-order-notification',
-            body: {
-              "supplier_id": supplierId,
-              "order_id": order['id'],
-            },
-           /* headers: {
-              'Authorization': 'Bearer ${session!.accessToken}',
-            },*/
-          );
+          try {
+            debugPrint("Calling Edge Function for supplier: $supplierId");
+            await supabase.functions.invoke(
+              'send-order-notification',
+              body: {"supplier_id": supplierId, "order_id": order['id']},
+            );
+          } catch (e) {
+            // Log the error but DO NOT fail the order
+            debugPrint(
+              "Failed to send notification to supplier $supplierId: $e",
+            );
+          }
         }
       }
 
