@@ -1358,7 +1358,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
       }
 
       // Convert to CSV
-      String csvData = const ListToCsvConverter().convert(rows);
+      String csvData = csv.encode(rows);
 
       // Save in app directory (NO PERMISSION REQUIRED)
       final directory = await getApplicationDocumentsDirectory();
