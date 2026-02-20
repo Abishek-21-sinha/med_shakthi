@@ -317,14 +317,14 @@ class _AuthGateState extends State<AuthGate> {
   void _setupOneSignalObserver() {
     // 1. Check synchronously first just in case it's already available
     final initialId = OneSignal.User.pushSubscription.id;
-    if (initialId != null) {
+    if (initialId != null && initialId.isNotEmpty) {
       _updatePlayerIdInDb(initialId);
     }
 
     // 2. Listen for future changes (e.g. late initialization or permission grant)
     OneSignal.User.pushSubscription.addObserver((state) {
       final newId = state.current.id;
-      if (newId != null) {
+      if (newId != null && newId.isNotEmpty) {
         _updatePlayerIdInDb(newId);
       }
     });
