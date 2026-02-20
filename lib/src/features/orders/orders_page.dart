@@ -65,7 +65,7 @@ class _OrdersPageState extends State<OrdersPage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("❌ Failed to fetch orders: $e")));
+        ).showSnackBar(SnackBar(content: Text(" Failed to fetch orders: $e")));
       }
     } finally {
       if (mounted) setState(() => _loading = false);

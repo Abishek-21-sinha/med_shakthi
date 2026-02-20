@@ -39,9 +39,8 @@ class _SupplierDashboardState extends State<SupplierDashboard> {
       setState(() => _selectedIndex = index);
     }
   }
-
   late final List<Widget> _pages = [
-    const SupplierDashboardHome(),
+     SupplierDashboardHome(),
     const SupplierCategoryPage(),
     const SizedBox(), // Placeholder for Add Product (handled by onTap)
     const SupplierOrdersPage(),
@@ -125,6 +124,20 @@ class _SupplierDashboardHomeState extends State<SupplierDashboardHome> {
   bool _hasError = false;
   Map<String, dynamic>? _data;
 
+  double thisMonthRevenue = 0;
+  double growth = 0;
+  bool isLoadingRevenue = true;
+
+  int pendingOrders = 0;
+  bool isLoadingPending = true;
+
+  int totalOrders = 0;
+  int deliveredOrders = 0;
+  double avgOrderValue = 0;
+  String fulfillmentRate = "0";
+
+  int totalClients = 0;
+  bool isLoadingClients = true;
   // Mock Categories loading
   List<Map<String, dynamic>> _categories = [];
   bool _isCategoriesLoading = true;
@@ -139,19 +152,143 @@ class _SupplierDashboardHomeState extends State<SupplierDashboardHome> {
   void initState() {
     super.initState();
     _loadAllData();
+    fetchDashboardStats();
     // ⏲️ Set up a periodic refresh for backup (in case real-time fails)
     _refreshTimer = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) => _loadAllData(),
+      const Duration(seconds: 15),
+          (_) => fetchDashboardStats(),
     );
   }
-
   @override
   void dispose() {
     _refreshTimer?.cancel();
     _statsSubscription?.cancel();
     _statsService.dispose();
     super.dispose();
+  }
+  Future<void> fetchDashboardStats() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+
+      if (user == null) {
+        print("USER NOT LOGGED IN");
+        return;
+      }
+      /// STEP 1: GET SUPPLIER ID
+      final supplier = await supabase
+          .from('suppliers')
+          .select('id')
+          .eq('user_id', user.id)
+          .single();
+
+      final supplierId = supplier['id'];
+
+      print("SUPPLIER ID: $supplierId");
+
+      /// STEP 2: FETCH ORDERS (MAIN SOURCE)
+      final List orders = await supabase
+          .from('orders')
+          .select('id, status, total_amount, user_id, created_at')
+          .eq('supplier_id', supplierId);
+
+      print("TOTAL ORDERS: ${orders.length}");
+
+      /// IMPORTANT: LOCAL VARIABLES USE KARO
+      int total = orders.length;
+
+      int delivered = orders
+          .where((o) =>
+      (o['status'] ?? '').toString().toLowerCase() == 'delivered')
+          .length;
+
+      int pending = orders
+          .where((o) =>
+      (o['status'] ?? '').toString().toLowerCase() != 'delivered')
+          .length;
+
+      print("Pending: $pending");
+      print("Delivered: $delivered");
+
+      /// Fulfillment Rate
+      String fulfillment =
+      total > 0 ? ((delivered / total) * 100).toStringAsFixed(0) : "0";
+
+      print("Fulfillment: $fulfillment");
+
+      /// Avg Order Value
+      double totalRevenueAll = 0;
+
+      for (var order in orders) {
+        totalRevenueAll += (order['total_amount'] ?? 0).toDouble();
+      }
+
+      double avgOrder =
+      total > 0 ? totalRevenueAll / total : 0;
+
+      print("AVG ORDER: $avgOrder");
+
+      /// Unique Customers
+      int customers =
+          orders.map((e) => e['user_id']).toSet().length;
+
+      print("Customers: $customers");
+
+      /// STEP 3: MONTHLY REVENUE FROM order_details
+      final List items = await supabase
+          .from('order_details')
+          .select('price, quantity, created_at')
+          .eq('supplier_id', supplierId);
+
+      final now = DateTime.now();
+
+      final startOfMonth = DateTime(now.year, now.month, 1);
+      final startOfNextMonth = DateTime(now.year, now.month + 1, 1);
+
+      double monthlyRevenue = 0;
+
+      for (var item in items) {
+        final date =
+        DateTime.parse(item['created_at']).toLocal();
+
+        if (date.isAfter(startOfMonth) &&
+            date.isBefore(startOfNextMonth)) {
+          monthlyRevenue +=
+              (item['price'] ?? 0) *
+                  (item['quantity'] ?? 0);
+        }
+      }
+
+      print("Monthly Revenue: $monthlyRevenue");
+
+      /// FINAL UPDATE UI STATE (ONLY ONCE)
+      if (!mounted) return;
+
+      setState(() {
+        totalOrders = total;
+        deliveredOrders = delivered;
+        pendingOrders = pending;
+        fulfillmentRate = fulfillment;
+        avgOrderValue = avgOrder;
+        totalClients = customers;
+        thisMonthRevenue = monthlyRevenue;
+
+        isLoadingRevenue = false;
+        isLoadingPending = false;
+        isLoadingClients = false;
+      });
+
+    } catch (e) {
+      print("DASHBOARD ERROR: $e");
+
+      if (mounted) {
+        setState(() {
+          isLoadingRevenue = false;
+          isLoadingPending = false;
+          isLoadingClients = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadAllData() async {
@@ -613,20 +750,19 @@ class _SupplierDashboardHomeState extends State<SupplierDashboardHome> {
     }
 
     // Extract all metrics from data
-    final thisMonthRevenue =
-        (_data?['thisMonthRevenue'] as num?)?.toDouble() ?? 0.0;
-    final growth = (_data?['growth'] as num?)?.toDouble() ?? 0.0;
-    final pending = (_data?['pendingOrders'] as num?)?.toInt() ?? 0;
-    final delivered = (_data?['deliveredOrders'] as num?)?.toInt() ?? 0;
-    final totalOrders = (_data?['totalOrders'] as num?)?.toInt() ?? 0;
-    final totalClients = (_data?['totalClients'] as num?)?.toInt() ?? 0;
+    final revenue = thisMonthRevenue;
+    final revenueGrowth = growth;
+    final pending = pendingOrders;
+    final delivered = deliveredOrders;
+    final totalOrders = this.totalOrders;
+    final avgOrderValue = this.avgOrderValue;
     final totalProducts = (_data?['totalProducts'] as num?)?.toInt() ?? 0;
     final lowStockCount = (_data?['lowStockCount'] as num?)?.toInt() ?? 0;
     final outOfStockCount = (_data?['outOfStockCount'] as num?)?.toInt() ?? 0;
-    final avgOrderValue = (_data?['avgOrderValue'] as num?)?.toDouble() ?? 0.0;
 
     // Calculate fulfillment rate
-    final fulfillmentRate = totalOrders > 0
+    final fulfillmentRate =
+    totalOrders > 0
         ? ((delivered / totalOrders) * 100).toStringAsFixed(0)
         : "0";
 
@@ -641,7 +777,14 @@ class _SupplierDashboardHomeState extends State<SupplierDashboardHome> {
         // Revenue Card
         _StatCard(
           title: "Revenue",
-          valueWidget: AnimatedCurrencyCounter(
+
+          valueWidget: isLoadingRevenue
+              ? const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+              : AnimatedCurrencyCounter(
             value: thisMonthRevenue,
             style: const TextStyle(
               color: Color(0xFF4CA6A8),
@@ -651,16 +794,22 @@ class _SupplierDashboardHomeState extends State<SupplierDashboardHome> {
             compact: true,
           ),
           subtitle: "This Month",
-          badge: "${growth >= 0 ? '+' : ''}${growth.toStringAsFixed(1)}%",
-          icon: Icons.attach_money,
+          badge:
+          "${growth >= 0 ? '+' : ''}${growth.toStringAsFixed(1)}%",
+          icon: Icons.currency_rupee,
           isAlert: false,
         ),
-
         // Pending Orders Card
         _StatCard(
           title: "Pending",
-          valueWidget: Text(
-            "$pending Orders",
+          valueWidget: isLoadingPending
+              ? const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+              : Text(
+            "$pendingOrders Orders",
             style: const TextStyle(
               color: Color(0xFF4CA6A8),
               fontWeight: FontWeight.bold,
@@ -668,9 +817,9 @@ class _SupplierDashboardHomeState extends State<SupplierDashboardHome> {
             ),
           ),
           subtitle: "To Process",
-          badge: pending > 0 ? "Action Needed" : "All Good",
+          badge: pendingOrders > 0 ? "Action Needed" : "All Good",
           icon: Icons.schedule,
-          isAlert: pending > 0,
+          isAlert: pendingOrders > 0,
         ),
 
         // Inventory Alert Card
@@ -695,7 +844,9 @@ class _SupplierDashboardHomeState extends State<SupplierDashboardHome> {
         // Customers Card
         _StatCard(
           title: "Customers",
-          valueWidget: Text(
+          valueWidget: isLoadingClients
+              ? const CircularProgressIndicator(strokeWidth: 2)
+              : Text(
             "$totalClients Clients",
             style: const TextStyle(
               color: Color(0xFF4CA6A8),
@@ -704,7 +855,9 @@ class _SupplierDashboardHomeState extends State<SupplierDashboardHome> {
             ),
           ),
           subtitle: "Active Buyers",
-          badge: totalOrders > 0 ? "$totalOrders Orders" : "No Orders",
+          badge: totalClients > 0
+              ? "Connected"
+              : "No Customers",
           icon: Icons.people,
           isAlert: false,
         ),
@@ -721,7 +874,7 @@ class _SupplierDashboardHomeState extends State<SupplierDashboardHome> {
             ),
           ),
           subtitle: "Delivery Rate",
-          badge: "$delivered Delivered",
+          badge: "$deliveredOrders Delivered",
           icon: Icons.local_shipping,
           isAlert: false,
         ),
@@ -729,6 +882,7 @@ class _SupplierDashboardHomeState extends State<SupplierDashboardHome> {
         // Average Order Value Card
         _StatCard(
           title: "Avg Order",
+
           valueWidget: AnimatedCurrencyCounter(
             value: avgOrderValue,
             style: const TextStyle(
@@ -738,11 +892,18 @@ class _SupplierDashboardHomeState extends State<SupplierDashboardHome> {
             ),
             compact: true,
           ),
+
           subtitle: "Per Transaction",
-          badge: totalOrders > 0 ? "$totalOrders Total" : "No Data",
-          icon: Icons.shopping_cart,
+
+          badge: totalOrders > 0
+              ? "$totalOrders Total"
+              : "No Data",
+
+          icon: Icons.currency_rupee,
+
           isAlert: false,
         ),
+
       ],
     );
   }
