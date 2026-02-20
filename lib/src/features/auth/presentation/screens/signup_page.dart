@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:med_shakthi/src/features/dashboard/pharmacy_home_screen.dart';
+import 'package:med_shakthi/main.dart';
 import 'package:med_shakthi/src/core/widgets/app_logo.dart';
 
 import 'login_page.dart';
@@ -253,7 +253,7 @@ class _SignupPageState extends State<SignupPage> {
                         Navigator.pushAndRemoveUntil(
                           context,
                           MaterialPageRoute(builder: (_) => const LoginPage()),
-                              (route) => false,
+                          (route) => false,
                         );
                       },
                       child: RichText(
@@ -314,6 +314,7 @@ class _SignupPageState extends State<SignupPage> {
       return;
     }
 
+    RootRouter.suppressAuthRedirect = true;
     setState(() => _isLoading = true);
 
     try {
@@ -377,10 +378,7 @@ class _SignupPageState extends State<SignupPage> {
       // ✅ Success
       if (isLogin) {
         // If we just logged them in, skip "Signup Success" dialog and go straight to dashboard
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const PharmacyHomeScreen()),
-        );
+        Navigator.of(context).popUntil((route) => route.isFirst);
       } else {
         showDialog(
           context: context,
@@ -392,12 +390,8 @@ class _SignupPageState extends State<SignupPage> {
               TextButton(
                 onPressed: () {
                   Navigator.pop(context); // Close dialog
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const PharmacyHomeScreen(),
-                    ),
-                  );
+                  // Pop back to RootRouter, which will evaluate AuthGate
+                  Navigator.of(context).popUntil((route) => route.isFirst);
                 },
                 child: const Text('Continue to Dashboard'),
               ),
@@ -421,6 +415,7 @@ class _SignupPageState extends State<SignupPage> {
         SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
       );
     } finally {
+      RootRouter.suppressAuthRedirect = false;
       if (mounted) setState(() => _isLoading = false);
     }
   }

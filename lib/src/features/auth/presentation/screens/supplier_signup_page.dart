@@ -6,8 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:med_shakthi/src/core/api/supabase_service.dart';
 import 'package:med_shakthi/src/core/utils/indian_validators.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-// Assuming SupplierDashboard is located here based on your project structure
-import 'package:med_shakthi/src/features/dashboard/supplier_dashboard.dart';
+import 'package:med_shakthi/main.dart'; // Import RootRouter
 
 class SupplierSignupPage extends StatefulWidget {
   const SupplierSignupPage({super.key});
@@ -142,6 +141,7 @@ class _SupplierSignupPageState extends State<SupplierSignupPage> {
       return;
     }
 
+    RootRouter.suppressAuthRedirect = true;
     setState(() => _isLoading = true);
 
     try {
@@ -197,6 +197,8 @@ class _SupplierSignupPageState extends State<SupplierSignupPage> {
         'verification_status': 'PENDING',
       }, onConflict: 'user_id');
 
+      RootRouter.suppressAuthRedirect = false;
+
       // ✅ SUCCESS UI & NAVIGATION
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -206,15 +208,15 @@ class _SupplierSignupPageState extends State<SupplierSignupPage> {
           ),
         );
 
-        // Navigate to Supplier Dashboard
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SupplierDashboard()),
-          (route) => false,
-        );
+        // Pop back to RootRouter. Since signup finished, AuthGate will evaluate
+        // to SupplierDashboard automatically with fresh data.
+        Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } on AuthException catch (e) {
+      RootRouter.suppressAuthRedirect = false;
       _showError(e.message);
     } catch (e) {
+      RootRouter.suppressAuthRedirect = false;
       _showError(e.toString());
     } finally {
       if (mounted) setState(() => _isLoading = false);

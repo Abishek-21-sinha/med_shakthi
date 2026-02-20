@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../features/profile/presentation/screens/privacy_policy_screen.dart';
 import 'supplier_faq_screen.dart';
 import 'supplier_notifications_page.dart';
+import 'supplier_account_settings_page.dart';
+import 'package:image_cropper/image_cropper.dart';
 
 class SupplierProfileScreen extends StatefulWidget {
   const SupplierProfileScreen({super.key});
@@ -17,52 +19,21 @@ class SupplierProfileScreen extends StatefulWidget {
 class _SupplierProfileScreenState extends State<SupplierProfileScreen> {
   final SupabaseClient supabase = Supabase.instance.client;
   bool _isLoading = false;
-  bool _isEditing = false;
   bool _isUploadingAvatar = false;
 
   File? _profileImageFile;
   String? _profileImageUrl;
 
-  // Controllers for editable fields
-  final _companyNameController = TextEditingController();
-  final _supplierNameController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _cityController = TextEditingController();
-  final _stateController = TextEditingController();
-  final _pincodeController = TextEditingController();
-  final _countryController = TextEditingController();
-  final _addressController = TextEditingController();
-  final _drugLicenseController = TextEditingController();
-  final _gstController = TextEditingController();
-  final _panController = TextEditingController();
-
   // Read-only / Status fields
+  String _companyName = 'Supplier';
   String _email = '';
   String _status = 'Verified';
   String _supplierCode = '';
-  String _drugLicenseExpiry = ''; // Usually date picker, keeping simple for now
-  String _companyType = '';
 
   @override
   void initState() {
     super.initState();
     _fetchSupplierData();
-  }
-
-  @override
-  void dispose() {
-    _companyNameController.dispose();
-    _supplierNameController.dispose();
-    _phoneController.dispose();
-    _cityController.dispose();
-    _stateController.dispose();
-    _pincodeController.dispose();
-    _countryController.dispose();
-    _addressController.dispose();
-    _drugLicenseController.dispose();
-    _gstController.dispose();
-    _panController.dispose();
-    super.dispose();
   }
 
   Future<void> _fetchSupplierData() async {
@@ -82,25 +53,9 @@ class _SupplierProfileScreenState extends State<SupplierProfileScreen> {
 
         if (data != null) {
           setState(() {
-            _companyNameController.text = data['company_name'] ?? '';
-            _supplierNameController.text = data['name'] ?? '';
-            _phoneController.text = data['phone'] ?? '';
+            _companyName = data['company_name'] ?? 'Supplier';
             _status = data['verification_status'] ?? 'Pending';
             _supplierCode = data['supplier_code'] ?? '';
-
-            // Address
-            _addressController.text = data['company_address'] ?? '';
-            _cityController.text = data['city'] ?? '';
-            _stateController.text = data['state'] ?? '';
-            _pincodeController.text = data['pincode'] ?? '';
-            _countryController.text = data['country'] ?? '';
-
-            // Legal
-            _drugLicenseController.text = data['drug_license_number'] ?? '';
-            _drugLicenseExpiry = data['drug_license_expiry'] ?? '';
-            _gstController.text = data['gst_number'] ?? '';
-            _panController.text = data['pan_number'] ?? '';
-            _companyType = data['company_type'] ?? '';
 
             // Profile image
             _profileImageUrl = data['profile_image_url'] as String?;
@@ -119,49 +74,6 @@ class _SupplierProfileScreenState extends State<SupplierProfileScreen> {
     }
   }
 
-  Future<void> _saveProfile() async {
-    setState(() => _isLoading = true);
-    final user = supabase.auth.currentUser;
-    if (user == null) return;
-
-    try {
-      await supabase
-          .from('suppliers')
-          .update({
-            'company_name': _companyNameController.text,
-            'name': _supplierNameController.text,
-            'phone': _phoneController.text,
-            'company_address': _addressController.text,
-            'city': _cityController.text,
-            'state': _stateController.text,
-            'pincode': _pincodeController.text,
-            'country': _countryController.text,
-            'drug_license_number': _drugLicenseController.text,
-            'gst_number': _gstController.text,
-            'pan_number': _panController.text,
-            if (_profileImageUrl != null) 'profile_image_url': _profileImageUrl,
-          })
-          .eq('user_id', user.id);
-
-      setState(() => _isEditing = false);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully!')),
-        );
-      }
-    } catch (e) {
-      debugPrint('Error updating profile: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to update: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
   Future<void> _pickProfileImage() async {
     final picked = await ImagePicker().pickImage(
       source: ImageSource.gallery,
@@ -169,35 +81,60 @@ class _SupplierProfileScreenState extends State<SupplierProfileScreen> {
     );
     if (picked == null) return;
 
+    final croppedFile = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'Crop Profile Photo',
+          toolbarColor: const Color(0xFF4C8077),
+          toolbarWidgetColor: Colors.white,
+          initAspectRatio: CropAspectRatioPreset.square,
+          lockAspectRatio: true,
+          hideBottomControls: true,
+        ),
+        IOSUiSettings(
+          title: 'Crop Profile Photo',
+          aspectRatioLockEnabled: true,
+          resetAspectRatioEnabled: false,
+          aspectRatioPickerButtonHidden: true,
+        ),
+      ],
+    );
+
+    if (croppedFile == null) return;
+
     setState(() {
-      _profileImageFile = File(picked.path);
+      _profileImageFile = File(croppedFile.path);
       _isUploadingAvatar = true;
     });
 
     try {
-      final user = supabase.auth.currentUser;
+      final user = Supabase.instance.client.auth.currentUser;
       if (user == null) return;
 
-      final ext = picked.path.split('.').last.toLowerCase();
+      final ext = croppedFile.path.split('.').last.toLowerCase();
       final fileName = '${user.id}/supplier_avatar.$ext';
 
-      await supabase.storage
+      await Supabase.instance.client.storage
           .from('avatars')
           .upload(
             fileName,
-            File(picked.path),
+            File(croppedFile.path),
             fileOptions: const FileOptions(upsert: true),
           );
 
-      final publicUrl = supabase.storage.from('avatars').getPublicUrl(fileName);
+      final publicUrl = Supabase.instance.client.storage
+          .from('avatars')
+          .getPublicUrl(fileName);
 
       final cacheBustedUrl =
           '$publicUrl?t=${DateTime.now().millisecondsSinceEpoch}';
 
       // Save URL to suppliers table
-      await supabase
+      await Supabase.instance.client
           .from('suppliers')
-          .update({'profile_image_url': publicUrl})
+          .update({'profile_image_url': cacheBustedUrl})
           .eq('user_id', user.id);
 
       if (mounted) {
@@ -236,19 +173,6 @@ class _SupplierProfileScreenState extends State<SupplierProfileScreen> {
         backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         elevation: 0,
         iconTheme: Theme.of(context).appBarTheme.iconTheme,
-        actions: [
-          IconButton(
-            icon: Icon(_isEditing ? Icons.save : Icons.edit),
-            color: const Color(0xFF4C8077),
-            onPressed: () {
-              if (_isEditing) {
-                _saveProfile();
-              } else {
-                setState(() => _isEditing = true);
-              }
-            },
-          ),
-        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -258,116 +182,25 @@ class _SupplierProfileScreenState extends State<SupplierProfileScreen> {
                 children: [
                   // 1. Header Profile Card (Existing UI)
                   _buildProfileHeader(),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 32),
 
-                  // 2. Business Details Section
-                  _buildExpansionSection(
-                    title: "Business Details",
-                    icon: Icons.business,
-                    children: [
-                      _buildInfoRow(
-                        Icons.business_center,
-                        "Type",
-                        _companyType,
-                        isEditable: false,
-                      ),
-                      _buildInfoRow(
-                        Icons.person,
-                        "Owner",
-                        _supplierNameController.text,
-                        controller: _supplierNameController,
-                      ),
-                      _buildInfoRow(
-                        Icons.phone,
-                        "Phone",
-                        _phoneController.text,
-                        controller: _phoneController,
-                      ),
-                      _buildInfoRow(
-                        Icons.email,
-                        "Email",
-                        _email,
-                        isEditable: false,
-                      ), // Email usually not editable directly
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // 3. Address Section
-                  _buildExpansionSection(
-                    title: "Address",
-                    icon: Icons.location_on,
-                    children: [
-                      _buildInfoRow(
-                        Icons.location_city,
-                        "City",
-                        _cityController.text,
-                        controller: _cityController,
-                      ),
-                      _buildInfoRow(
-                        Icons.map,
-                        "State",
-                        _stateController.text,
-                        controller: _stateController,
-                      ),
-                      _buildInfoRow(
-                        Icons.pin_drop,
-                        "Pincode",
-                        _pincodeController.text,
-                        controller: _pincodeController,
-                      ),
-                      _buildInfoRow(
-                        Icons.public,
-                        "Country",
-                        _countryController.text,
-                        controller: _countryController,
-                      ),
-                      _buildInfoRow(
-                        Icons.home,
-                        "Full Address",
-                        _addressController.text,
-                        controller: _addressController,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // 4. Legal & Tax Section
-                  _buildExpansionSection(
-                    title: "Legal & Licenses",
-                    icon: Icons.verified_user,
-                    children: [
-                      _buildInfoRow(
-                        Icons.assignment,
-                        "Drug License",
-                        _drugLicenseController.text,
-                        controller: _drugLicenseController,
-                      ),
-                      _buildInfoRow(
-                        Icons.calendar_today,
-                        "License Expiry",
-                        _drugLicenseExpiry,
-                        isEditable: false,
-                      ),
-                      _buildInfoRow(
-                        Icons.receipt_long,
-                        "GST Number",
-                        _gstController.text,
-                        controller: _gstController,
-                      ),
-                      _buildInfoRow(
-                        Icons.badge,
-                        "PAN Number",
-                        _panController.text,
-                        controller: _panController,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // 5. Account Actions
+                  // 2. Account Actions
                   _buildSectionTitle("Settings"),
-                  _buildMenuOption(Icons.settings, "Account Settings", () {}),
+                  _buildMenuOption(
+                    Icons.settings,
+                    "Account Settings",
+                    () async {
+                      final updated = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const SupplierAccountSettingsPage(),
+                        ),
+                      );
+                      if (updated == true) {
+                        _fetchSupplierData(); // Refresh if updated
+                      }
+                    },
+                  ),
                   _buildMenuOption(Icons.privacy_tip, "Privacy Policy", () {
                     Navigator.push(
                       context,
@@ -461,8 +294,8 @@ class _SupplierProfileScreenState extends State<SupplierProfileScreen> {
                           (_profileImageUrl == null ||
                               _profileImageUrl!.isEmpty))
                       ? Text(
-                          _companyNameController.text.isNotEmpty
-                              ? _companyNameController.text[0].toUpperCase()
+                          _companyName.isNotEmpty
+                              ? _companyName[0].toUpperCase()
                               : 'S',
                           style: const TextStyle(
                             fontSize: 32,
@@ -507,27 +340,10 @@ class _SupplierProfileScreenState extends State<SupplierProfileScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          // Editable Company Name if in editing mode
-          _isEditing
-              ? TextField(
-                  controller: _companyNameController,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  decoration: const InputDecoration(
-                    hintText: "Company Name",
-                    border: UnderlineInputBorder(),
-                  ),
-                )
-              : Text(
-                  _companyNameController.text,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+          Text(
+            _companyName,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 4),
           Text(_email, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
           const SizedBox(height: 8),
@@ -561,114 +377,6 @@ class _SupplierProfileScreenState extends State<SupplierProfileScreen> {
               ),
             ),
           ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildExpansionSection({
-    required String title,
-    required IconData icon,
-    required List<Widget> children,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
-        ),
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          leading: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF4C8077).withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.business,
-              color: Color(0xFF4C8077),
-              size: 20,
-            ),
-          ),
-          title: Text(
-            title,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 15,
-              color: Theme.of(context).textTheme.bodyLarge?.color,
-            ),
-          ),
-          childrenPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 10,
-          ),
-          children: children,
-        ),
-      ),
-    );
-  }
-
-  // Modified helper to support editing
-  Widget _buildInfoRow(
-    IconData icon,
-    String label,
-    String value, {
-    TextEditingController? controller,
-    bool isEditable = true,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20, color: Colors.grey[400]),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                if (_isEditing && isEditable && controller != null)
-                  SizedBox(
-                    height: 30, // constrain height for edit field in row
-                    child: TextField(
-                      controller: controller,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context).textTheme.bodyLarge?.color,
-                      ),
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                        border: UnderlineInputBorder(),
-                      ),
-                    ),
-                  )
-                else
-                  Text(
-                    value.isNotEmpty ? value : "Not Provided",
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: Theme.of(context).textTheme.bodyMedium?.color,
-                    ),
-                  ),
-              ],
-            ),
-          ),
         ],
       ),
     );
