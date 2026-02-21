@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -51,11 +52,12 @@ class _AddProductPageState extends State<AddProductPage> {
     'Other (Custom)': [],
   };
 
-  File? imageFile;
+  CroppedFile? croppedFile;
   String? existingImageUrl;
   String? supplierCode;
   String? supplierId;
   bool _isLoading = false;
+  String _loadingStatus = '';
 
   @override
   void initState() {
@@ -121,38 +123,75 @@ class _AddProductPageState extends State<AddProductPage> {
   Future<void> pickImage() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      setState(() => imageFile = File(picked.path));
+    if (picked == null) return;
+
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'Crop Product Image',
+          toolbarColor: const Color(0xFF4CA6A8),
+          toolbarWidgetColor: Colors.white,
+          activeControlsWidgetColor: const Color(0xFF4CA6A8),
+          initAspectRatio: CropAspectRatioPreset.square,
+          lockAspectRatio: false,
+        ),
+        IOSUiSettings(title: 'Crop Product Image'),
+      ],
+    );
+    if (cropped != null) {
+      setState(() => croppedFile = cropped);
     }
   }
 
+  /// Uses uploadBinary (reads bytes first) — same proven approach as banner service.
+  /// Passing a File object with a CroppedFile path can silently fail on Android.
   Future<String?> uploadImage() async {
-    if (imageFile == null) return null;
+    if (croppedFile == null) return null;
 
     final fileName = 'product_${DateTime.now().millisecondsSinceEpoch}.jpg';
-    try {
-      await supabase.storage
-          .from('product-images')
-          .upload(
-            fileName,
-            imageFile!,
-            fileOptions: const FileOptions(upsert: true),
-          );
+    debugPrint('📸 Starting image upload: $fileName');
+    debugPrint('📸 Cropped file path: ${croppedFile!.path}');
 
-      return supabase.storage.from('product-images').getPublicUrl(fileName);
-    } catch (e) {
-      debugPrint('Image upload error: $e');
-      return null;
-    }
+    final bytes = await croppedFile!.readAsBytes();
+    debugPrint('📸 File size: ${bytes.length} bytes');
+
+    await supabase.storage
+        .from('product-images')
+        .uploadBinary(
+          fileName,
+          bytes,
+          fileOptions: const FileOptions(
+            contentType: 'image/jpeg',
+            upsert: true,
+          ),
+        );
+
+    final url = supabase.storage.from('product-images').getPublicUrl(fileName);
+    debugPrint('✅ Upload successful. Public URL: $url');
+    return url;
   }
 
   Future<void> saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _loadingStatus = croppedFile != null
+          ? 'Uploading image...'
+          : 'Saving product...';
+    });
 
     try {
-      final imageUrl = await uploadImage() ?? existingImageUrl;
+      // Upload image first so we surface failures before writing to DB
+      final String? imageUrl;
+      if (croppedFile != null) {
+        imageUrl = await uploadImage();
+        if (mounted) setState(() => _loadingStatus = 'Saving product...');
+      } else {
+        imageUrl = existingImageUrl;
+      }
 
       final bool isCustom = category == 'Other (Custom)';
 
@@ -164,10 +203,8 @@ class _AddProductPageState extends State<AddProductPage> {
         'price': double.parse(priceController.text),
         'unit_size': unitSizeController.text.trim(),
         'expiry_date': expiryController.text,
-        'category': isCustom
-            ? 'other'
-            : category, // Removed toLowerCase() to match dashboard expectation if needed, but 'products' table usually stores lowercase categories. Let's keep existing logic or verify. The user code had `.toLowerCase().trim()` in one version and just `category` in another. I'll use `category` as per the map keys or lowercase it. The user code in `a code1.txt` had `category.toLowerCase().trim()`. I will stick to that.
-        'sub_category': isCustom ? null : subCategory, // Same here.
+        'category': isCustom ? 'other' : category,
+        'sub_category': isCustom ? null : subCategory,
         'custom_category': isCustom
             ? customCategoryController.text.trim()
             : null,
@@ -176,22 +213,23 @@ class _AddProductPageState extends State<AddProductPage> {
             ? customSubCategoryController.text.trim()
             : null,
         'supplier_code': supplierCode,
-        'supplier_id': supplierId, // Linked to suppliers table
+        'supplier_id': supplierId,
         'image_url': imageUrl,
       };
 
-      // FIX: The user code had `category.toLowerCase().trim()` but the `categoryMap` keys are capitalized (e.g., 'Medicines').
-      // If the DB expects lowercase, I should lowercase it.
-      data['category'] = isCustom
-          ? 'other'
-          : category; // The user code 1 txt actually used `category.toLowerCase().trim()`. I will preserve that to be safe.
-      data['sub_category'] = isCustom ? null : subCategory;
-
       if (isEditing) {
-        await supabase
+        final res = await supabase
             .from('products')
             .update(data)
-            .eq('id', widget.product!['id']);
+            .eq('id', widget.product!['id'])
+            .select();
+
+        debugPrint('UPDATE DB RES: $res');
+        if ((res as List).isEmpty) {
+          throw Exception(
+            'Database update failed. No rows modified (it may have been deleted, or there is an RLS permissions issue).',
+          );
+        }
       } else {
         await supabase.from('products').insert(data);
       }
@@ -205,7 +243,7 @@ class _AddProductPageState extends State<AddProductPage> {
         ),
       );
 
-      Navigator.pop(context);
+      Navigator.pop(context, true);
     } catch (e) {
       debugPrint('Save product error: $e');
       if (mounted) {
@@ -250,40 +288,96 @@ class _AddProductPageState extends State<AddProductPage> {
           color: Theme.of(context).appBarTheme.foregroundColor,
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              _imagePicker(),
-              _input("Product Name", nameController),
-              _input("Generic Name", genericController),
-              _input("Brand", brandController),
-              Row(
+      body: Stack(
+        children: [
+          // ── Form ──────────────────────────────────────────────────────
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Form(
+              key: _formKey,
+              child: Column(
                 children: [
-                  Expanded(child: _input("SKU", skuController)),
-                  const SizedBox(width: 10),
-                  Expanded(child: _input("Unit Size", unitSizeController)),
+                  _imagePicker(),
+                  _input("Product Name", nameController),
+                  _input("Generic Name", genericController),
+                  _input("Brand", brandController),
+                  Row(
+                    children: [
+                      Expanded(child: _input("SKU", skuController)),
+                      const SizedBox(width: 10),
+                      Expanded(child: _input("Unit Size", unitSizeController)),
+                    ],
+                  ),
+                  _input(
+                    "Price",
+                    priceController,
+                    keyboard: TextInputType.number,
+                  ),
+                  _supplierIdField(),
+                  _expiryField(),
+                  _categoryDropdown(),
+                  if (category != 'Other (Custom)') _subCategoryDropdown(),
+                  if (category == 'Other (Custom)') ...[
+                    _input("Custom Category", customCategoryController),
+                    _input(
+                      "Custom Sub Category (optional)",
+                      customSubCategoryController,
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  _submitButton(),
                 ],
               ),
-              _input("Price", priceController, keyboard: TextInputType.number),
-              _supplierIdField(),
-              _expiryField(),
-              _categoryDropdown(),
-              if (category != 'Other (Custom)') _subCategoryDropdown(),
-              if (category == 'Other (Custom)') ...[
-                _input("Custom Category", customCategoryController),
-                _input(
-                  "Custom Sub Category (optional)",
-                  customSubCategoryController,
-                ),
-              ],
-              const SizedBox(height: 20),
-              _submitButton(),
-            ],
+            ),
           ),
-        ),
+
+          // ── Upload / Save overlay ──────────────────────────────────────
+          if (_isLoading)
+            Container(
+              color: Colors.black.withValues(alpha: 0.45),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 28,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(
+                        color: Color(0xFF4CA6A8),
+                        strokeWidth: 3,
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        _loadingStatus,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Please wait…',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -369,12 +463,10 @@ class _AddProductPageState extends State<AddProductPage> {
           ),
         ),
         onPressed: _isLoading ? null : saveProduct,
-        child: _isLoading
-            ? const CircularProgressIndicator(color: Colors.white)
-            : const Text(
-                'Save Product',
-                style: TextStyle(color: Colors.white, fontSize: 16),
-              ),
+        child: const Text(
+          'Save Product',
+          style: TextStyle(color: Colors.white, fontSize: 16),
+        ),
       ),
     );
   }
@@ -392,34 +484,44 @@ class _AddProductPageState extends State<AddProductPage> {
             color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
           ),
         ),
-        child: imageFile == null
-            ? existingImageUrl != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Image.network(
-                        existingImageUrl!,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                      ),
-                    )
-                  : const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.add_a_photo, size: 40, color: Colors.grey),
-                        SizedBox(height: 8),
-                        Text(
-                          'Tap to add product image',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ],
-                    )
-            : ClipRRect(
+        child: croppedFile != null
+            // Newly picked & cropped image
+            ? ClipRRect(
                 borderRadius: BorderRadius.circular(20),
                 child: Image.file(
-                  imageFile!,
+                  File(croppedFile!.path),
                   fit: BoxFit.cover,
                   width: double.infinity,
                 ),
+              )
+            : existingImageUrl != null
+            // Existing image from DB (edit mode)
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.network(
+                  existingImageUrl!,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  errorBuilder: (context, error, stack) => const Center(
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      color: Colors.grey,
+                      size: 40,
+                    ),
+                  ),
+                ),
+              )
+            // No image yet
+            : const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.add_a_photo, size: 40, color: Colors.grey),
+                  SizedBox(height: 8),
+                  Text(
+                    'Tap to add product image',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ],
               ),
       ),
     );

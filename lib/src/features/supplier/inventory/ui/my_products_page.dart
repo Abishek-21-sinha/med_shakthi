@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'add_product_page.dart';
-import '../../../profile/presentation/screens/supplier_category_page.dart';
+
 import 'package:med_shakthi/src/features/products/data/models/product_model.dart';
+import 'package:med_shakthi/src/core/utils/smart_product_image.dart';
 import 'supplier_product_details_page.dart';
 
 class MyProductsPage extends StatefulWidget {
@@ -184,37 +185,16 @@ class _MyProductsPageState extends State<MyProductsPage> {
             // Image
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Container(
+              child: SizedBox(
                 height: 70,
                 width: 70,
-                color: Colors.grey.shade100,
-                child: imageUrl != null
-                    ? Image.network(
-                        imageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Center(
-                          child: Icon(
-                            getSubCategoryIcon(
-                              p['sub_category'] ?? p['category'] ?? "",
-                            ),
-                            color: Theme.of(
-                              context,
-                            ).primaryColor.withValues(alpha: 0.5),
-                            size: 32,
-                          ),
-                        ),
-                      )
-                    : Center(
-                        child: Icon(
-                          getSubCategoryIcon(
-                            p['sub_category'] ?? p['category'] ?? "",
-                          ),
-                          color: Theme.of(
-                            context,
-                          ).primaryColor.withValues(alpha: 0.5),
-                          size: 32,
-                        ),
-                      ),
+                child: SmartProductImage(
+                  imageUrl: imageUrl,
+                  category: p['sub_category'] ?? p['category'] ?? '',
+                  width: 70,
+                  height: 70,
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
             const SizedBox(width: 16),
