@@ -291,46 +291,84 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
 
             // 💰 Billing Summary
             _sectionTitle("Billing Summary"),
-            _infoRow("Subtotal", "₹${order!['total_amount']}"),
-            _infoRow("Total Amount", "₹${order!['total_amount']}"),
+            Builder(
+              builder: (context) {
+                // Compute items subtotal from order_details list
+                final itemsList =
+                    order!['order_details'] as List<dynamic>? ?? [];
+                final itemsSubtotal = itemsList.fold<double>(
+                  0,
+                  (sum, item) =>
+                      sum +
+                      ((item['price'] as num? ?? 0) *
+                          (item['quantity'] as num? ?? 0)),
+                );
+                final shippingFee =
+                    (order!['shipping'] as num?)?.toDouble() ?? 0.0;
+                final grandTotal =
+                    (order!['total_amount'] as num?)?.toDouble() ?? 0.0;
+                return Column(
+                  children: [
+                    _infoRow(
+                      "Items Subtotal",
+                      "₹${itemsSubtotal.toStringAsFixed(2)}",
+                    ),
+                    _infoRow(
+                      "Shipping & Handling",
+                      shippingFee > 0
+                          ? "₹${shippingFee.toStringAsFixed(2)}"
+                          : "Free",
+                    ),
+                    const Divider(height: 20),
+                    _infoRow(
+                      "Grand Total",
+                      "₹${grandTotal.toStringAsFixed(2)}",
+                    ),
+                  ],
+                );
+              },
+            ),
             const SizedBox(height: 30),
 
-            // 🚚 Actions (Preserved)
+            // 🚚 Actions
             if (status == 'Pending')
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   OutlinedButton(
-                    onPressed: () => updateOrderStatus("Cancelled"),
+                    onPressed: () => updateOrderStatus('Cancelled'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.red,
                     ),
-                    child: const Text("Reject"),
+                    child: const Text('Reject'),
                   ),
                   ElevatedButton(
-                    onPressed: () => updateOrderStatus("Accepted"),
-                    child: const Text("Accept Order"),
+                    onPressed: () => updateOrderStatus('Confirmed'),
+                    child: const Text('Accept Order'),
                   ),
                 ],
               )
-            else if (status == 'Accepted')
+            else if (status == 'Confirmed')
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => updateOrderStatus("Dispatched"),
+                  onPressed: () => updateOrderStatus('Shipped'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).primaryColor,
                   ),
-                  child: const Text("Mark as Dispatched"),
+                  child: const Text('Mark as Shipped'),
                 ),
               )
-            else if (status == 'Dispatched')
+            else if (status == 'Shipped')
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-                  child: const Text("Order Dispatched"),
+                  onPressed: () => updateOrderStatus('Delivered'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Mark as Delivered'),
                 ),
               ),
           ],

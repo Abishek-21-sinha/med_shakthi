@@ -263,87 +263,6 @@ class _AccountPageState extends State<AccountPage> {
     }
   }
 
-  Future<void> _handleDeleteAccount() async {
-    final passwordController = TextEditingController();
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Delete Account"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              "This action cannot be undone. Please enter your password to confirm.",
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: "Password",
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("Delete"),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && passwordController.text.isNotEmpty) {
-      if (!mounted) return;
-      // Capture CartData reference before any async suspension
-      final cartData = context.read<CartData>();
-      setState(() => _isLoading = true);
-      try {
-        // Re-authenticate user
-        final user = supabase.auth.currentUser;
-        if (user != null && user.email != null) {
-          await supabase.auth.signInWithPassword(
-            email: user.email!,
-            password: passwordController.text,
-          );
-
-          // Call the debug delete_user RPC
-          final deleteRes = await supabase.rpc('delete_current_user_debug');
-          debugPrint("DELETE DEBUG: $deleteRes");
-          if (deleteRes['success'] == false) {
-            throw Exception(
-              'Deletion failed: ${deleteRes['error']} (Details: ${deleteRes['detail']})',
-            );
-          }
-
-          // Sign the user out locally since their auth record is gone
-          cartData.clearLocalStateOnly();
-          await supabase.auth.signOut();
-
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Account deleted successfully")),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text("Delete failed: $e")));
-        }
-      } finally {
-        if (mounted) setState(() => _isLoading = false);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -591,31 +510,6 @@ class _AccountPageState extends State<AccountPage> {
                             );
                           },
                         ),
-
-                        const SizedBox(height: 24),
-
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () {},
-                                child: const Text("Change Password"),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: OutlinedButton(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.red.shade600,
-                                ),
-                                onPressed: _handleDeleteAccount,
-                                child: const Text("Delete Account"),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 16),
 
                         FilledButton(
                           onPressed: _handleLogout,

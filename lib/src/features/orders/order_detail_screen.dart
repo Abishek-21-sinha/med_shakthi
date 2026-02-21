@@ -6,6 +6,7 @@ import 'package:med_shakthi/src/features/orders/models/order_detail_model.dart';
 import 'package:med_shakthi/src/core/utils/smart_product_image.dart';
 import 'package:med_shakthi/src/features/chat/services/chat_service.dart';
 import 'package:med_shakthi/src/features/chat/presentation/screens/unified_chat_screen.dart';
+import 'invoice_page.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final Map<String, dynamic> orderData;
@@ -66,7 +67,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Widget build(BuildContext context) {
     final orderGroupId = (widget.orderData['order_group_id'] ?? "N/A")
         .toString();
-    final totalAmount = (widget.orderData['total_amount'] ?? 0).toString();
+    final totalAmount =
+        (widget.orderData['total_amount'] as num?)?.toDouble() ?? 0.0;
+    final shippingFee =
+        (widget.orderData['shipping'] as num?)?.toDouble() ?? 0.0;
     final deliveryLocation =
         widget.orderData['shipping_address'] ?? "Address info not available";
     final paymentMode = widget.orderData['payment_method'] ?? "Online";
@@ -194,14 +198,25 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               ),
                             ),
                             const SizedBox(height: 16),
+                            // Items Subtotal
                             _buildSummaryRow(
-                              'Subtotal (Calculated)',
+                              'Items Subtotal',
                               '₹${_calculateSubtotal().toStringAsFixed(2)}',
                             ),
-                            const Divider(),
+                            const SizedBox(height: 8),
+                            // Shipping fee from DB
                             _buildSummaryRow(
-                              'Total Amount',
-                              '₹$totalAmount',
+                              'Shipping & Handling',
+                              shippingFee > 0
+                                  ? '₹${shippingFee.toStringAsFixed(2)}'
+                                  : 'Free',
+                            ),
+                            const SizedBox(height: 4),
+                            const Divider(),
+                            // Grand Total
+                            _buildSummaryRow(
+                              'Grand Total',
+                              '₹${totalAmount.toStringAsFixed(2)}',
                               isTotal: true,
                             ),
                           ],
@@ -461,9 +476,26 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             Expanded(
               child: ElevatedButton.icon(
                 onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Invoice download coming soon'),
+                  final itemMaps = _items
+                      .map(
+                        (item) => {
+                          'item_name': item.itemName,
+                          'brand': item.brand,
+                          'unit_size': item.unitSize,
+                          'quantity': item.qty,
+                          'price': item.price,
+                        },
+                      )
+                      .toList();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => InvoicePage(
+                        orderData: widget.orderData,
+                        items: itemMaps,
+                        buyerName: '',
+                        buyerPhone: '',
+                      ),
                     ),
                   );
                 },

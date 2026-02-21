@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:med_shakthi/src/features/banners/services/banner_service_supabase.dart';
 import 'package:med_shakthi/src/features/banners/models/banner_model_supabase.dart';
@@ -65,14 +66,40 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
   }
 
   Future<void> _pickImage() async {
+    // Capture theme values before any async gap
+    final primaryColor = Theme.of(context).primaryColor;
+
     try {
       final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 80,
+        imageQuality: 90,
       );
-      if (image != null) {
+      if (image == null) return;
+
+      // Crop image to 16:9 banner ratio
+      final CroppedFile? cropped = await ImageCropper().cropImage(
+        sourcePath: image.path,
+        aspectRatio: const CropAspectRatio(ratioX: 16, ratioY: 9),
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Crop Banner Image',
+            toolbarColor: primaryColor,
+            toolbarWidgetColor: Colors.white,
+            activeControlsWidgetColor: primaryColor,
+            initAspectRatio: CropAspectRatioPreset.ratio16x9,
+            lockAspectRatio: true,
+          ),
+          IOSUiSettings(
+            title: 'Crop Banner Image',
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: false,
+          ),
+        ],
+      );
+
+      if (cropped != null && mounted) {
         setState(() {
-          _selectedImageFile = image;
+          _selectedImageFile = XFile(cropped.path);
         });
       }
     } catch (e) {
@@ -85,18 +112,18 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
   }
 
   Future<void> _selectDate(BuildContext context, bool isStartDate) async {
+    final colorScheme = Theme.of(context).colorScheme;
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: isStartDate ? _startDate : _endDate,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
       builder: (context, child) {
-        final theme = Theme.of(context);
         return Theme(
-          data: theme.copyWith(
-            colorScheme: theme.colorScheme.copyWith(
-              primary: theme.primaryColor,
-              onPrimary: Colors.white,
+          data: Theme.of(context).copyWith(
+            colorScheme: colorScheme.copyWith(
+              primary: colorScheme.primary,
+              onPrimary: colorScheme.onPrimary,
             ),
           ),
           child: child!,
@@ -161,6 +188,7 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
       }
 
       if (mounted) {
+        final colorScheme = Theme.of(context).colorScheme;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -168,17 +196,18 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
                   ? 'Banner updated successfully!'
                   : 'Banner published successfully!',
             ),
-            backgroundColor: Theme.of(context).primaryColor,
+            backgroundColor: colorScheme.primary,
           ),
         );
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
+        final colorScheme = Theme.of(context).colorScheme;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            backgroundColor: colorScheme.error,
           ),
         );
       }
@@ -190,25 +219,28 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: theme.scaffoldBackgroundColor,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: theme.iconTheme.color),
-          onPressed: () => Navigator.pop(context),
-        ),
         title: Text(
           widget.existingBanner != null ? 'Edit Banner' : 'Create Banner',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
         ),
+        actions: [
+          if (_selectedImageFile != null || widget.existingBanner != null)
+            TextButton.icon(
+              onPressed: _pickImage,
+              icon: Icon(Icons.swap_horiz, color: colorScheme.primary),
+              label: Text(
+                'Change',
+                style: TextStyle(color: colorScheme.primary),
+              ),
+            ),
+        ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: theme.primaryColor))
+          ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Form(
@@ -217,7 +249,7 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     // Image Upload Section
-                    _buildImageUploadSection(),
+                    _buildImageUploadSection(colorScheme),
                     const SizedBox(height: 24),
 
                     // Title Input
@@ -225,6 +257,7 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
                       controller: _titleController,
                       label: 'Offer Title',
                       hint: 'e.g., LOWEST PRICES ARE LIVE',
+                      colorScheme: colorScheme,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return 'Please enter a title';
@@ -239,6 +272,7 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
                       controller: _subtitleController,
                       label: 'Subtitle / Discount',
                       hint: 'Up to 60% Off',
+                      colorScheme: colorScheme,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return 'Please enter a subtitle';
@@ -249,7 +283,7 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
                     const SizedBox(height: 20),
 
                     // Category Selector
-                    _buildCategorySelector(),
+                    _buildCategorySelector(colorScheme),
                     const SizedBox(height: 20),
 
                     // Date Pickers
@@ -259,6 +293,7 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
                           child: _buildDatePicker(
                             label: 'Start Date',
                             date: _startDate,
+                            colorScheme: colorScheme,
                             onTap: () => _selectDate(context, true),
                           ),
                         ),
@@ -267,6 +302,7 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
                           child: _buildDatePicker(
                             label: 'End Date',
                             date: _endDate,
+                            colorScheme: colorScheme,
                             onTap: () => _selectDate(context, false),
                           ),
                         ),
@@ -275,11 +311,11 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
                     const SizedBox(height: 20),
 
                     // Active Toggle
-                    _buildActiveToggle(),
+                    _buildActiveToggle(colorScheme),
                     const SizedBox(height: 32),
 
                     // Publish Button
-                    _buildPublishButton(),
+                    _buildPublishButton(colorScheme),
                   ],
                 ),
               ),
@@ -287,17 +323,16 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
     );
   }
 
-  Widget _buildImageUploadSection() {
-    final theme = Theme.of(context);
+  Widget _buildImageUploadSection(ColorScheme colorScheme) {
     return GestureDetector(
       onTap: _pickImage,
       child: Container(
         height: 200,
         decoration: BoxDecoration(
-          color: theme.cardColor,
+          color: colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: theme.primaryColor,
+            color: colorScheme.primary,
             width: 2,
             strokeAlign: BorderSide.strokeAlignInside,
           ),
@@ -311,7 +346,9 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
                               _selectedImageFile!.path,
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) {
-                                return Container(color: Colors.grey);
+                                return Container(
+                                  color: colorScheme.surfaceContainerHighest,
+                                );
                               },
                             )
                           : Image.file(
@@ -323,11 +360,11 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           return Container(
-                            color: Colors.grey[800],
-                            child: const Center(
+                            color: colorScheme.surfaceContainerHighest,
+                            child: Center(
                               child: Icon(
                                 Icons.broken_image,
-                                color: Colors.white54,
+                                color: colorScheme.onSurfaceVariant,
                               ),
                             ),
                           );
@@ -340,34 +377,30 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: theme.primaryColor.withValues(alpha: 0.1),
+                      color: colorScheme.primary.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       Icons.cloud_upload_outlined,
                       size: 48,
-                      color: theme.primaryColor,
+                      color: colorScheme.primary,
                     ),
                   ),
                   const SizedBox(height: 16),
                   Text(
                     'Upload Banner Image',
                     style: TextStyle(
-                      color: theme.textTheme.bodyLarge?.color?.withValues(
-                        alpha: 0.7,
-                      ),
+                      color: colorScheme.onSurface.withValues(alpha: 0.8),
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
                   Text(
-                    'Tap to select image',
+                    '16:9 ratio recommended · Tap to select',
                     style: TextStyle(
-                      color: theme.textTheme.bodyMedium?.color?.withValues(
-                        alpha: 0.5,
-                      ),
-                      fontSize: 14,
+                      color: colorScheme.onSurface.withValues(alpha: 0.5),
+                      fontSize: 13,
                     ),
                   ),
                 ],
@@ -380,111 +413,114 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
     required TextEditingController controller,
     required String label,
     required String hint,
+    required ColorScheme colorScheme,
     String? Function(String?)? validator,
   }) {
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
           style: TextStyle(
-            color: theme.textTheme.bodyLarge?.color?.withValues(alpha: 0.7),
+            color: colorScheme.onSurface.withValues(alpha: 0.7),
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
         ),
         const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: theme.cardColor,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: theme.shadowColor.withValues(alpha: 0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: TextFormField(
-            controller: controller,
-            style: TextStyle(color: theme.textTheme.bodyLarge?.color),
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: TextStyle(
-                color: theme.textTheme.bodyMedium?.color?.withValues(
-                  alpha: 0.5,
-                ),
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 16,
+        TextFormField(
+          controller: controller,
+          style: TextStyle(color: colorScheme.onSurface),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(
+              color: colorScheme.onSurface.withValues(alpha: 0.4),
+            ),
+            filled: true,
+            fillColor: colorScheme.surface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: colorScheme.outline.withValues(alpha: 0.2),
               ),
             ),
-            validator: validator,
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: colorScheme.error),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: colorScheme.error, width: 1.5),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
           ),
+          validator: validator,
         ),
       ],
     );
   }
 
-  Widget _buildCategorySelector() {
-    final theme = Theme.of(context);
+  Widget _buildCategorySelector(ColorScheme colorScheme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Category',
           style: TextStyle(
-            color: theme.textTheme.bodyLarge?.color?.withValues(alpha: 0.7),
+            color: colorScheme.onSurface.withValues(alpha: 0.7),
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
         ),
         const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: theme.cardColor,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: theme.shadowColor.withValues(alpha: 0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: DropdownButtonFormField<String>(
-            initialValue: _selectedCategory,
-            dropdownColor: theme.cardColor,
-            style: TextStyle(color: theme.textTheme.bodyLarge?.color),
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 16,
+        DropdownButtonFormField<String>(
+          initialValue: _selectedCategory,
+          dropdownColor: colorScheme.surface,
+          style: TextStyle(color: colorScheme.onSurface),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: colorScheme.surface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: colorScheme.outline.withValues(alpha: 0.2),
               ),
             ),
-            icon: Icon(Icons.arrow_drop_down, color: theme.primaryColor),
-            items: _categories.map((category) {
-              return DropdownMenuItem(value: category, child: Text(category));
-            }).toList(),
-            onChanged: (value) {
-              if (value != null) {
-                setState(() {
-                  _selectedCategory = value;
-                });
-              }
-            },
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
           ),
+          icon: Icon(Icons.arrow_drop_down, color: colorScheme.primary),
+          items: _categories.map((category) {
+            return DropdownMenuItem(value: category, child: Text(category));
+          }).toList(),
+          onChanged: (value) {
+            if (value != null) {
+              setState(() {
+                _selectedCategory = value;
+              });
+            }
+          },
         ),
       ],
     );
@@ -493,16 +529,16 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
   Widget _buildDatePicker({
     required String label,
     required DateTime date,
+    required ColorScheme colorScheme,
     required VoidCallback onTap,
   }) {
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
           style: TextStyle(
-            color: theme.textTheme.bodyLarge?.color?.withValues(alpha: 0.7),
+            color: colorScheme.onSurface.withValues(alpha: 0.7),
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
@@ -513,26 +549,23 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             decoration: BoxDecoration(
-              color: theme.cardColor,
+              color: colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: theme.shadowColor.withValues(alpha: 0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+              border: Border.all(
+                color: colorScheme.outline.withValues(alpha: 0.2),
+              ),
             ),
             child: Row(
               children: [
-                Icon(Icons.calendar_today, color: theme.primaryColor, size: 20),
+                Icon(
+                  Icons.calendar_today,
+                  color: colorScheme.primary,
+                  size: 20,
+                ),
                 const SizedBox(width: 12),
                 Text(
                   '${date.day}/${date.month}/${date.year}',
-                  style: TextStyle(
-                    color: theme.textTheme.bodyLarge?.color,
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(color: colorScheme.onSurface, fontSize: 16),
                 ),
               ],
             ),
@@ -542,31 +575,36 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
     );
   }
 
-  Widget _buildActiveToggle() {
-    final theme = Theme.of(context);
+  Widget _buildActiveToggle(ColorScheme colorScheme) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: theme.cardColor,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: theme.shadowColor.withValues(alpha: 0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: colorScheme.outline.withValues(alpha: 0.2)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            'Active / Inactive',
-            style: TextStyle(
-              color: theme.textTheme.bodyLarge?.color,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Active',
+                style: TextStyle(
+                  color: colorScheme.onSurface,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Text(
+                _isActive ? 'Banner is visible to users' : 'Banner is hidden',
+                style: TextStyle(
+                  color: colorScheme.onSurface.withValues(alpha: 0.5),
+                  fontSize: 12,
+                ),
+              ),
+            ],
           ),
           Switch(
             value: _isActive,
@@ -575,65 +613,38 @@ class _CreateBannerScreenState extends State<CreateBannerScreen> {
                 _isActive = value;
               });
             },
-            activeThumbColor: theme.primaryColor,
-            activeTrackColor: theme.primaryColor.withValues(alpha: 0.5),
+            activeThumbColor: colorScheme.primary,
+            activeTrackColor: colorScheme.primary.withValues(alpha: 0.3),
+            inactiveThumbColor: colorScheme.onSurface.withValues(alpha: 0.4),
+            inactiveTrackColor: colorScheme.onSurface.withValues(alpha: 0.1),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildPublishButton() {
-    final theme = Theme.of(context);
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            theme.primaryColor,
-            theme.primaryColor.withValues(alpha: 0.8),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: theme.primaryColor.withValues(alpha: 0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+  Widget _buildPublishButton(ColorScheme colorScheme) {
+    return FilledButton(
+      onPressed: _isLoading ? null : _publishBanner,
+      style: FilledButton.styleFrom(
+        backgroundColor: colorScheme.primary,
+        foregroundColor: colorScheme.onPrimary,
+        minimumSize: const Size.fromHeight(56),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
-      child: ElevatedButton(
-        onPressed: _isLoading ? null : _publishBanner,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        child: _isLoading
-            ? const SizedBox(
-                height: 24,
-                width: 24,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
-              )
-            : Text(
-                widget.existingBanner != null
-                    ? 'Update Banner'
-                    : 'Publish Offer',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
+      child: _isLoading
+          ? SizedBox(
+              height: 24,
+              width: 24,
+              child: CircularProgressIndicator(
+                color: colorScheme.onPrimary,
+                strokeWidth: 2,
               ),
-      ),
+            )
+          : Text(
+              widget.existingBanner != null ? 'Update Banner' : 'Publish Offer',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
     );
   }
 }

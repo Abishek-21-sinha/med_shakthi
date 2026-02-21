@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'sales_stats_service.dart';
 import 'dart:io';
-import 'package:csv/csv.dart';
 import 'package:path_provider/path_provider.dart';
-// permission_handler removed (unused)
 import 'package:open_filex/open_filex.dart';
 
 class SalesAnalyticsPage extends StatefulWidget {
@@ -20,22 +18,60 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
   String _selectedCategory = 'All';
   String _selectedPaymentStatus = 'All';
   late AnimationController _animationController;
-
   late Future<Map<String, dynamic>> _salesStatsFuture;
+
+  // Search and transactions
+  final TextEditingController _searchController = TextEditingController();
+  List<Map<String, String>> _allTransactions = [];
+  List<Map<String, String>> _filteredTransactions = [];
 
   @override
   void initState() {
     super.initState();
-    _salesStatsFuture = SalesStatsService().fetchSalesStats();
+    _salesStatsFuture = _fetchStats();
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..forward();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  Future<Map<String, dynamic>> _fetchStats() {
+    return SalesStatsService().fetchSalesStats(dateRange: _selectedDateRange);
+  }
+
+  void _onSearchChanged() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      if (query.isEmpty) {
+        _filteredTransactions = List.from(_allTransactions);
+      } else {
+        _filteredTransactions = _allTransactions.where((t) {
+          return t['id']!.toLowerCase().contains(query) ||
+              t['medicine']!.toLowerCase().contains(query) ||
+              t['status']!.toLowerCase().contains(query);
+        }).toList();
+      }
+    });
+  }
+
+  void _applyFiltersAndRefetch() {
+    setState(() {
+      _salesStatsFuture = SalesStatsService().fetchSalesStats(
+        dateRange: _selectedDateRange,
+        category: _selectedCategory == 'All' ? null : _selectedCategory,
+        paymentStatus: _selectedPaymentStatus == 'All'
+            ? null
+            : _selectedPaymentStatus,
+      );
+      _searchController.clear();
+    });
   }
 
   @override
   void dispose() {
     _animationController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -51,20 +87,55 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
           future: _salesStatsFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return Center(
+                child: CircularProgressIndicator(
+                  color: theme.colorScheme.primary,
+                ),
+              );
             }
             if (snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}'));
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: theme.colorScheme.error,
+                    ),
+                    const SizedBox(height: 16),
+                    Text('Error: ${snapshot.error}'),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: () =>
+                          setState(() => _salesStatsFuture = _fetchStats()),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              );
             }
             if (!snapshot.hasData) {
               return const Center(child: Text('No data found.'));
             }
             final data = snapshot.data ?? {};
 
+            // Sync transactions for search
+            final transactionsRaw =
+                data['recentTransactions'] as List<dynamic>? ?? [];
+            _allTransactions = transactionsRaw.map((e) {
+              final map = e as Map<String, dynamic>;
+              return map.map((key, value) => MapEntry(key, value.toString()));
+            }).toList();
+
+            if (_searchController.text.isEmpty) {
+              _filteredTransactions = List.from(_allTransactions);
+            }
+
             return CustomScrollView(
               physics: const BouncingScrollPhysics(),
               slivers: [
-                // App Bar
                 SliverAppBar(
                   floating: true,
                   snap: true,
@@ -75,10 +146,18 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 24,
-                      color: theme.textTheme.bodyLarge?.color,
+                      color: theme.colorScheme.onSurface,
                     ),
                   ),
                   actions: [
+                    IconButton(
+                      icon: Icon(
+                        Icons.refresh,
+                        color: theme.colorScheme.primary,
+                      ),
+                      tooltip: 'Refresh',
+                      onPressed: _applyFiltersAndRefetch,
+                    ),
                     IconButton(
                       icon: Icon(
                         Icons.filter_list_rounded,
@@ -90,45 +169,31 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                   ],
                 ),
 
-                // Content
                 SliverPadding(
                   padding: const EdgeInsets.all(16),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
-                      // Date Range Selector
                       _buildDateRangeSelector(isDark),
                       const SizedBox(height: 20),
-
-                      // Sales Summary Cards
                       _buildSalesSummaryCards(isDark, data),
                       const SizedBox(height: 24),
-
-                      // Filter Chips
                       _buildFilterChips(isDark),
                       const SizedBox(height: 24),
-
-                      // Sales Trend Chart
                       _buildSectionTitle('Sales Trend', isDark),
                       const SizedBox(height: 16),
                       _buildSalesTrendChart(isDark, data),
                       const SizedBox(height: 24),
-
-                      // Category-wise Sales
                       _buildSectionTitle('Category Performance', isDark),
                       const SizedBox(height: 16),
                       _buildCategoryBarChart(isDark, data),
                       const SizedBox(height: 24),
-
-                      // Top Selling Medicines
                       _buildSectionTitle('Top Selling Products', isDark),
                       const SizedBox(height: 16),
                       _buildTopSellingList(isDark, data),
                       const SizedBox(height: 24),
-
-                      // Sales Details Table
                       _buildSectionTitle('Recent Transactions', isDark),
                       const SizedBox(height: 16),
-                      _buildSalesDetailsTable(isDark, data),
+                      _buildSalesDetailsTable(isDark),
                       const SizedBox(height: 100),
                     ]),
                   ),
@@ -166,12 +231,8 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                 if (range == 'Custom') {
                   _showDateRangePicker(context);
                 } else {
-                  setState(() {
-                    _selectedDateRange = range;
-                    _salesStatsFuture = SalesStatsService().fetchSalesStats(
-                      dateRange: _selectedDateRange,
-                    );
-                  });
+                  setState(() => _selectedDateRange = range);
+                  _applyFiltersAndRefetch();
                 }
               },
               child: AnimatedContainer(
@@ -213,6 +274,9 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
     final orders = data['totalOrders'] ?? 0;
     final pending = data['pendingOrders'] ?? 0;
     final growth = data['growth'] ?? 0.0;
+    final growthStr = growth >= 0
+        ? '+${growth.toStringAsFixed(1)}%'
+        : '${growth.toStringAsFixed(1)}%';
 
     return GridView.count(
       shrinkWrap: true,
@@ -224,8 +288,8 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
       children: [
         _buildSummaryCard(
           'Total Revenue',
-          '₹${revenue.toStringAsFixed(0)}',
-          '+$growth%',
+          '₹${(revenue as double).toStringAsFixed(0)}',
+          growthStr,
           Icons.trending_up_rounded,
           const Color(0xFF4CA6A8),
           isDark,
@@ -240,8 +304,8 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
         ),
         _buildSummaryCard(
           'Profit Growth',
-          '$growth%',
-          '+$growth%',
+          growthStr,
+          growthStr,
           Icons.show_chart_rounded,
           const Color(0xFF10B981),
           isDark,
@@ -353,18 +417,18 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
       physics: const BouncingScrollPhysics(),
       child: Row(
         children: [
-          _buildFilterChip('📅 $_selectedDateRange', isDark, () => {}),
+          _buildFilterChip('📅 $_selectedDateRange', isDark, () {}),
           const SizedBox(width: 8),
           _buildFilterChip(
             '🗂 Category: $_selectedCategory',
             isDark,
-            () => _showCategoryFilter(context),
+            () => _showFilterBottomSheet(context),
           ),
           const SizedBox(width: 8),
           _buildFilterChip(
             '💳 Payment: $_selectedPaymentStatus',
             isDark,
-            () => _showPaymentFilter(context),
+            () => _showFilterBottomSheet(context),
           ),
         ],
       ),
@@ -435,35 +499,19 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
         [];
 
     if (salesTrend.isEmpty) {
-      return Container(
-        height: 280,
-        alignment: Alignment.center,
-        child: const Text('No data available'),
-      );
+      return _buildEmptyChart(isDark, 280);
     }
 
     double maxY = salesTrend
         .map((e) => (e['value'] as num).toDouble())
         .reduce((curr, next) => curr > next ? curr : next);
-    if (maxY < 10) maxY = 10; // Minimum Y axis
-    maxY *= 1.2; // Add some headroom
+    if (maxY < 10) maxY = 10;
+    maxY *= 1.2;
 
     return Container(
       height: 280,
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.3)
-                : Colors.black.withValues(alpha: 0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+      decoration: _chartDecoration(isDark),
       child: LineChart(
         LineChartData(
           gridData: FlGridData(
@@ -485,11 +533,9 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                 showTitles: true,
                 reservedSize: 45,
                 getTitlesWidget: (value, meta) {
-                  // Don't show max/min edge values if they overlap
                   if (value == meta.max || value == meta.min) {
                     return const SizedBox.shrink();
                   }
-
                   String text;
                   if (value >= 100000) {
                     text = '₹${(value / 100000).toStringAsFixed(1)}L';
@@ -498,7 +544,6 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                   } else {
                     text = '₹${value.toInt()}';
                   }
-
                   return Text(
                     text,
                     style: TextStyle(
@@ -513,21 +558,15 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
               sideTitles: SideTitles(
                 showTitles: true,
                 getTitlesWidget: (value, meta) {
-                  // Only show labels for integer values to avoid duplicate labels
-                  if (value != value.toInt()) {
-                    return const SizedBox.shrink();
-                  }
-
+                  if (value != value.toInt()) return const SizedBox.shrink();
                   int idx = value.toInt();
                   if (idx >= 0 && idx < salesTrend.length) {
-                    // For 30 days, we might want to skip some labels to avoid crowding
                     if (salesTrend.length > 15 &&
                         idx % 3 != 0 &&
                         idx != salesTrend.length - 1 &&
                         idx != 0) {
                       return const SizedBox.shrink();
                     }
-
                     return Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
@@ -599,6 +638,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
     );
   }
 
+  // ✅ FIX: dynamic bar count — no more hardcoded [0],[1],[2],[3]
   Widget _buildCategoryBarChart(bool isDark, Map<String, dynamic> data) {
     final Map<String, double> categoryMap =
         (data['categoryPerformance'] as Map<String, dynamic>?)?.map(
@@ -606,45 +646,37 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
         ) ??
         {};
 
-    // We map categories to these fixed 4 slots for simplicity, or we can use dynamic slots
-    // For now, let's take the top 4 categories
-    final sortedCategories = categoryMap.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final List<String> topCategoryNames = [];
-    final List<double> topCategoryValues = [];
-
-    for (int i = 0; i < 4; i++) {
-      if (i < sortedCategories.length) {
-        topCategoryNames.add(sortedCategories[i].key);
-        topCategoryValues.add(sortedCategories[i].value);
-      } else {
-        topCategoryNames.add('N/A');
-        topCategoryValues.add(0);
-      }
+    if (categoryMap.isEmpty) {
+      return _buildEmptyChart(isDark, 300, message: 'No category data yet');
     }
 
-    double maxY = topCategoryValues.isEmpty
-        ? 10
-        : topCategoryValues.reduce((curr, next) => curr > next ? curr : next);
+    final sortedCategories = categoryMap.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    // Take up to 6 categories dynamically
+    final topEntries = sortedCategories.take(6).toList();
+    final topCategoryNames = topEntries.map((e) => e.key).toList();
+    final topCategoryValues = topEntries.map((e) => e.value).toList();
+
+    double maxY = topCategoryValues.reduce(
+      (curr, next) => curr > next ? curr : next,
+    );
     if (maxY < 10) maxY = 10;
     maxY *= 1.2;
+
+    const barColors = [
+      Color(0xFF4CA6A8),
+      Color(0xFF6366F1),
+      Color(0xFF10B981),
+      Color(0xFFF59E0B),
+      Color(0xFFEF4444),
+      Color(0xFFEC4899),
+    ];
 
     return Container(
       height: 300,
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.3)
-                : Colors.black.withValues(alpha: 0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+      decoration: _chartDecoration(isDark),
       child: BarChart(
         BarChartData(
           alignment: BarChartAlignment.spaceAround,
@@ -654,8 +686,12 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
             touchTooltipData: BarTouchTooltipData(
               getTooltipColor: (group) => const Color(0xFF4CA6A8),
               getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                String label = '';
+                if (group.x < topCategoryNames.length) {
+                  label = '${topCategoryNames[group.x]}\n';
+                }
                 return BarTooltipItem(
-                  '₹${rod.toY.toInt()}',
+                  '$label₹${rod.toY.toInt()}',
                   const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -673,7 +709,6 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                   if (value == meta.max || value == meta.min) {
                     return const SizedBox.shrink();
                   }
-
                   String text;
                   if (value >= 100000) {
                     text = '₹${(value / 100000).toStringAsFixed(1)}L';
@@ -682,7 +717,6 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                   } else {
                     text = '₹${value.toInt()}';
                   }
-
                   return Text(
                     text,
                     style: TextStyle(
@@ -697,13 +731,10 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
               sideTitles: SideTitles(
                 showTitles: true,
                 getTitlesWidget: (value, meta) {
-                  if (value.toInt() >= 0 &&
-                      value.toInt() < topCategoryNames.length) {
-                    String name = topCategoryNames[value.toInt()];
-                    if (name.length > 10) {
-                      name =
-                          '${name.substring(0, 8)}...'; // Truncate long names
-                    }
+                  int idx = value.toInt();
+                  if (idx >= 0 && idx < topCategoryNames.length) {
+                    String name = topCategoryNames[idx];
+                    if (name.length > 8) name = '${name.substring(0, 7)}…';
                     return Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
@@ -715,7 +746,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                       ),
                     );
                   }
-                  return const SizedBox();
+                  return const SizedBox.shrink();
                 },
               ),
             ),
@@ -740,43 +771,46 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
             },
           ),
           borderData: FlBorderData(show: false),
-          barGroups: [
-            _buildBarGroup(0, topCategoryValues[0], const Color(0xFF4CA6A8)),
-            _buildBarGroup(1, topCategoryValues[1], const Color(0xFF6366F1)),
-            _buildBarGroup(2, topCategoryValues[2], const Color(0xFF10B981)),
-            _buildBarGroup(3, topCategoryValues[3], const Color(0xFFF59E0B)),
-          ],
+          // ✅ Generate bars dynamically — no more hardcoded indices
+          barGroups: List.generate(topEntries.length, (i) {
+            final color = barColors[i % barColors.length];
+            return BarChartGroupData(
+              x: i,
+              barRods: [
+                BarChartRodData(
+                  toY: topCategoryValues[i],
+                  gradient: LinearGradient(
+                    colors: [color, color.withValues(alpha: 0.7)],
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                  ),
+                  width: 28,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(8),
+                  ),
+                ),
+              ],
+            );
+          }),
         ),
       ),
-    );
-  }
-
-  BarChartGroupData _buildBarGroup(int x, double y, Color color) {
-    return BarChartGroupData(
-      x: x,
-      barRods: [
-        BarChartRodData(
-          toY: y,
-          gradient: LinearGradient(
-            colors: [color, color.withValues(alpha: 0.7)],
-            begin: Alignment.bottomCenter,
-            end: Alignment.topCenter,
-          ),
-          width: 30, // Make slightly narrower to fit text
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-        ),
-      ],
     );
   }
 
   Widget _buildTopSellingList(bool isDark, Map<String, dynamic> data) {
     var productsRaw = data['topProducts'] as List<dynamic>? ?? [];
 
-    int maxSales = productsRaw.isEmpty
-        ? 1
-        : productsRaw
-              .map((p) => p['sales'] as int)
-              .reduce((a, b) => a > b ? a : b);
+    if (productsRaw.isEmpty) {
+      return _buildEmptyChart(
+        isDark,
+        120,
+        message: 'No product sales data yet',
+      );
+    }
+
+    int maxSales = productsRaw
+        .map((p) => p['sales'] as int)
+        .reduce((a, b) => a > b ? a : b);
     if (maxSales == 0) maxSales = 1;
 
     final products = productsRaw.map((p) {
@@ -798,19 +832,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
 
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.3)
-                : Colors.black.withValues(alpha: 0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+      decoration: _chartDecoration(isDark),
       child: Column(
         children: products.asMap().entries.map((entry) {
           final index = entry.key;
@@ -912,34 +934,17 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
     );
   }
 
-  Widget _buildSalesDetailsTable(bool isDark, Map<String, dynamic> data) {
-    final transactionsRaw = data['recentTransactions'] as List<dynamic>? ?? [];
-    final List<Map<String, String>> transactions = transactionsRaw.map((e) {
-      final map = e as Map<String, dynamic>;
-      return map.map((key, value) => MapEntry(key, value.toString()));
-    }).toList();
-
+  // ✅ FIX: _filteredTransactions used (with search), not raw data parameter
+  Widget _buildSalesDetailsTable(bool isDark) {
     return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.3)
-                : Colors.black.withValues(alpha: 0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+      decoration: _chartDecoration(isDark),
       child: Column(
         children: [
-          // Header with search and export
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
+                // ✅ FIX: wired-up search with TextEditingController
                 Expanded(
                   child: Container(
                     height: 40,
@@ -950,12 +955,13 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: TextField(
+                      controller: _searchController,
                       style: TextStyle(
                         color: isDark ? Colors.white : Colors.black87,
                         fontSize: 13,
                       ),
                       decoration: InputDecoration(
-                        hintText: 'Search transactions...',
+                        hintText: 'Search by ID, medicine or status…',
                         hintStyle: TextStyle(
                           color: isDark ? Colors.white60 : Colors.black54,
                           fontSize: 13,
@@ -965,6 +971,18 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                           color: isDark ? Colors.white60 : Colors.black54,
                           size: 20,
                         ),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: Icon(
+                                  Icons.clear,
+                                  size: 16,
+                                  color: isDark
+                                      ? Colors.white54
+                                      : Colors.black45,
+                                ),
+                                onPressed: () => _searchController.clear(),
+                              )
+                            : null,
                         border: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(
                           vertical: 10,
@@ -974,8 +992,9 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                   ),
                 ),
                 const SizedBox(width: 12),
+                // ✅ FIX: correct CSV API
                 GestureDetector(
-                  onTap: () => _exportCSV(transactions),
+                  onTap: () => _exportCSV(_filteredTransactions),
                   child: Container(
                     height: 40,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -985,8 +1004,8 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                       ),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Row(
-                      children: const [
+                    child: const Row(
+                      children: [
                         Icon(
                           Icons.file_download_outlined,
                           color: Colors.white,
@@ -1008,178 +1027,176 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
               ],
             ),
           ),
-
-          // Table
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              headingRowColor: WidgetStateProperty.all(
-                isDark
-                    ? Colors.white.withValues(alpha: 0.03)
-                    : Colors.black.withValues(alpha: 0.02),
+          if (_filteredTransactions.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(32),
+              child: Text(
+                _searchController.text.isNotEmpty
+                    ? 'No transactions match your search'
+                    : 'No transactions found',
+                style: TextStyle(
+                  color: isDark ? Colors.white54 : Colors.black45,
+                  fontSize: 14,
+                ),
               ),
-              dataRowColor: WidgetStateProperty.all(Colors.transparent),
-              columns: [
-                DataColumn(
-                  label: Text(
-                    'Order ID',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
+            )
+          else
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingRowColor: WidgetStateProperty.all(
+                  isDark
+                      ? Colors.white.withValues(alpha: 0.03)
+                      : Colors.black.withValues(alpha: 0.02),
                 ),
-                DataColumn(
-                  label: Text(
-                    'Medicine',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                ),
-                DataColumn(
-                  label: Text(
-                    'Qty',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                ),
-                DataColumn(
-                  label: Text(
-                    'Amount',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                ),
-                DataColumn(
-                  label: Text(
-                    'Status',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                ),
-                DataColumn(
-                  label: Text(
-                    'Date',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                ),
-              ],
-              rows: transactions.map((transaction) {
-                return DataRow(
-                  cells: [
-                    DataCell(
-                      Text(
-                        transaction['id']!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF4CA6A8),
-                        ),
-                      ),
-                    ),
-                    DataCell(
-                      Text(
-                        transaction['medicine']!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                    ),
-                    DataCell(
-                      Text(
-                        transaction['qty']!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? Colors.white70 : Colors.black54,
-                        ),
-                      ),
-                    ),
-                    DataCell(
-                      Text(
-                        transaction['amount']!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                    ),
-                    DataCell(
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color:
-                              transaction['status']!.toLowerCase() == 'paid' ||
-                                  transaction['status']!.toLowerCase() ==
-                                      'success' ||
-                                  transaction['status']!.toLowerCase() ==
-                                      'completed'
-                              ? const Color(0xFF10B981).withValues(alpha: 0.1)
-                              : transaction['status']!.toLowerCase() ==
-                                    'pending'
-                              ? const Color(0xFFF59E0B).withValues(alpha: 0.1)
-                              : const Color(0xFFEF4444).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          // Capitalize first letter of status
-                          transaction['status']![0].toUpperCase() +
-                              transaction['status']!.substring(1),
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color:
-                                transaction['status']!.toLowerCase() ==
-                                        'paid' ||
-                                    transaction['status']!.toLowerCase() ==
-                                        'success' ||
-                                    transaction['status']!.toLowerCase() ==
-                                        'completed'
-                                ? const Color(0xFF10B981)
-                                : transaction['status']!.toLowerCase() ==
-                                      'pending'
-                                ? const Color(0xFFF59E0B)
-                                : const Color(0xFFEF4444),
+                dataRowColor: WidgetStateProperty.all(Colors.transparent),
+                columns: [
+                  _tableColumn('Order ID', isDark),
+                  _tableColumn('Medicine', isDark),
+                  _tableColumn('Qty', isDark),
+                  _tableColumn('Amount', isDark),
+                  _tableColumn('Status', isDark),
+                  _tableColumn('Date', isDark),
+                ],
+                rows: _filteredTransactions.map((transaction) {
+                  final status = transaction['status'] ?? '';
+                  final isSuccess = [
+                    'paid',
+                    'success',
+                    'completed',
+                  ].contains(status.toLowerCase());
+                  final isPending = status.toLowerCase() == 'pending';
+                  final statusColor = isSuccess
+                      ? const Color(0xFF10B981)
+                      : isPending
+                      ? const Color(0xFFF59E0B)
+                      : const Color(0xFFEF4444);
+
+                  return DataRow(
+                    cells: [
+                      DataCell(
+                        Text(
+                          transaction['id'] ?? '',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF4CA6A8),
                           ),
                         ),
                       ),
-                    ),
-                    DataCell(
-                      Text(
-                        transaction['date']!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? Colors.white70 : Colors.black54,
+                      DataCell(
+                        Text(
+                          transaction['medicine'] ?? '',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                );
-              }).toList(),
+                      DataCell(
+                        Text(
+                          transaction['qty'] ?? '',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? Colors.white70 : Colors.black54,
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          transaction['amount'] ?? '',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            status.isNotEmpty
+                                ? status[0].toUpperCase() + status.substring(1)
+                                : '',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: statusColor,
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          transaction['date'] ?? '',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? Colors.white70 : Colors.black54,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
             ),
-          ),
         ],
+      ),
+    );
+  }
+
+  DataColumn _tableColumn(String label, bool isDark) {
+    return DataColumn(
+      label: Text(
+        label,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 12,
+          color: isDark ? Colors.white : Colors.black87,
+        ),
+      ),
+    );
+  }
+
+  BoxDecoration _chartDecoration(bool isDark) {
+    return BoxDecoration(
+      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      borderRadius: BorderRadius.circular(24),
+      boxShadow: [
+        BoxShadow(
+          color: isDark
+              ? Colors.black.withValues(alpha: 0.3)
+              : Colors.black.withValues(alpha: 0.05),
+          blurRadius: 20,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyChart(
+    bool isDark,
+    double height, {
+    String message = 'No data available',
+  }) {
+    return Container(
+      height: height,
+      alignment: Alignment.center,
+      decoration: _chartDecoration(isDark),
+      child: Text(
+        message,
+        style: TextStyle(
+          color: isDark ? Colors.white54 : Colors.black45,
+          fontSize: 14,
+        ),
       ),
     );
   }
@@ -1190,112 +1207,156 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
       backgroundColor: Colors.transparent,
       builder: (context) {
         final isDark = Theme.of(context).brightness == Brightness.dark;
-        return Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Filters',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : Colors.black87,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Filters',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          Icons.close,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _filterSectionLabel('Date Range', isDark),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    children: ['Today', 'Week', 'Month', 'Custom'].map((range) {
+                      return ChoiceChip(
+                        label: Text(range),
+                        selected: _selectedDateRange == range,
+                        selectedColor: const Color(0xFF4CA6A8),
+                        labelStyle: TextStyle(
+                          color: _selectedDateRange == range
+                              ? Colors.white
+                              : null,
+                        ),
+                        onSelected: (selected) {
+                          setModalState(() => _selectedDateRange = range);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 20),
+                  _filterSectionLabel('Category', isDark),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    children:
+                        [
+                          'All',
+                          'Medicines',
+                          'Supplements',
+                          'Devices',
+                          'Baby Care',
+                          'Personal Care',
+                        ].map((category) {
+                          return ChoiceChip(
+                            label: Text(category),
+                            selected: _selectedCategory == category,
+                            selectedColor: const Color(0xFF4CA6A8),
+                            labelStyle: TextStyle(
+                              color: _selectedCategory == category
+                                  ? Colors.white
+                                  : null,
+                            ),
+                            onSelected: (selected) {
+                              setModalState(() => _selectedCategory = category);
+                            },
+                          );
+                        }).toList(),
+                  ),
+                  const SizedBox(height: 20),
+                  _filterSectionLabel('Payment Status', isDark),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    children: ['All', 'Paid', 'Pending', 'Failed'].map((
+                      status,
+                    ) {
+                      return ChoiceChip(
+                        label: Text(status),
+                        selected: _selectedPaymentStatus == status,
+                        selectedColor: const Color(0xFF4CA6A8),
+                        labelStyle: TextStyle(
+                          color: _selectedPaymentStatus == status
+                              ? Colors.white
+                              : null,
+                        ),
+                        onSelected: (selected) {
+                          setModalState(() => _selectedPaymentStatus = status);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF4CA6A8),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        // ✅ FIX: apply filters and re-fetch data
+                        _applyFiltersAndRefetch();
+                      },
+                      child: const Text(
+                        'Apply Filters',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.close,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                    onPressed: () => Navigator.pop(context),
-                  ),
+                  const SizedBox(height: 8),
                 ],
               ),
-              const SizedBox(height: 20),
-              Text(
-                'Date Range',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white70 : Colors.black54,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                children: ['Today', 'Week', 'Month', 'Custom'].map((range) {
-                  return ChoiceChip(
-                    label: Text(range),
-                    selected: _selectedDateRange == range,
-                    onSelected: (selected) {
-                      setState(() => _selectedDateRange = range);
-                      Navigator.pop(context);
-                    },
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Category',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white70 : Colors.black54,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                children: ['All', 'Medicines', 'Supplements', 'Devices'].map((
-                  category,
-                ) {
-                  return ChoiceChip(
-                    label: Text(category),
-                    selected: _selectedCategory == category,
-                    onSelected: (selected) {
-                      setState(() => _selectedCategory = category);
-                      Navigator.pop(context);
-                    },
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Payment Status',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white70 : Colors.black54,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                children: ['All', 'Paid', 'Pending', 'Failed'].map((status) {
-                  return ChoiceChip(
-                    label: Text(status),
-                    selected: _selectedPaymentStatus == status,
-                    onSelected: (selected) {
-                      setState(() => _selectedPaymentStatus = status);
-                      Navigator.pop(context);
-                    },
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
+            );
+          },
         );
       },
+    );
+  }
+
+  Widget _filterSectionLabel(String label, bool isDark) {
+    return Text(
+      label,
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: isDark ? Colors.white70 : Colors.black54,
+      ),
     );
   }
 
@@ -1316,8 +1377,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
       },
     );
 
-    if (picked != null) {
-      if (!mounted) return;
+    if (picked != null && mounted) {
       setState(() {
         _selectedDateRange = 'Custom';
         _salesStatsFuture = SalesStatsService().fetchSalesStats(
@@ -1326,62 +1386,55 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
           customEndDate: picked.end,
         );
       });
-    } else {
-      // If user cancelled, maybe revert to previous range if needed, or do nothing
     }
   }
 
-  void _showCategoryFilter(BuildContext context) {
-    _showFilterBottomSheet(context);
-  }
-
-  void _showPaymentFilter(BuildContext context) {
-    _showFilterBottomSheet(context);
-  }
-
+  // ✅ FIX: correct CSV API — ListToCsvConverter().convert()
   Future<void> _exportCSV(List<Map<String, dynamic>> transactions) async {
     try {
-      // CSV rows
-      List<List<dynamic>> rows = [];
+      List<List<dynamic>> rows = [
+        ['Order ID', 'Medicine', 'Qty', 'Amount', 'Status', 'Date'],
+        ...transactions.map(
+          (t) => [
+            t['id'],
+            t['medicine'],
+            t['qty'],
+            t['amount'],
+            t['status'],
+            t['date'],
+          ],
+        ),
+      ];
 
-      rows.add(["Order ID", "Medicine", "Qty", "Amount", "Status", "Date"]);
-
-      for (var t in transactions) {
-        rows.add([
-          t['id'],
-          t['medicine'],
-          t['qty'],
-          t['amount'],
-          t['status'],
-          t['date'],
-        ]);
+      // Simple CSV encoding — quote any field containing commas or quotes
+      String encodeField(dynamic v) {
+        final s = v?.toString() ?? '';
+        if (s.contains(',') || s.contains('"') || s.contains('\n')) {
+          return '"${s.replaceAll('"', '""')}"';
+        }
+        return s;
       }
 
-      // Convert to CSV
-      String csvData = csv.encode(rows);
+      String csvData = rows
+          .map((row) => row.map(encodeField).join(','))
+          .join('\n');
 
-      // Save in app directory (NO PERMISSION REQUIRED)
       final directory = await getApplicationDocumentsDirectory();
-
       final path =
-          "${directory.path}/sales_export_${DateTime.now().millisecondsSinceEpoch}.csv";
+          '${directory.path}/sales_export_${DateTime.now().millisecondsSinceEpoch}.csv';
 
-      final file = File(path);
-
-      await file.writeAsString(csvData);
-
-      // Open file
+      await File(path).writeAsString(csvData);
       await OpenFilex.open(path);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("CSV Exported Successfully")),
+        const SnackBar(content: Text('CSV exported successfully')),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text("Export failed: $e")));
+      ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
     }
   }
 }

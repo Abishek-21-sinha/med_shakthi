@@ -107,6 +107,8 @@ class SalesStatsService {
     String dateRange = 'Month',
     DateTime? customStartDate,
     DateTime? customEndDate,
+    String? category, // null = All categories
+    String? paymentStatus, // null = All payment statuses
   }) async {
     try {
       final user = _supabase.auth.currentUser;
@@ -313,18 +315,24 @@ class SalesStatsService {
           }
         }
 
-        // Recent Transactions population
-        recentTransactions.add({
-          'id':
-              '#ORD-${orderId.length >= 5 ? orderId.substring(0, 5).toUpperCase() : orderId.toUpperCase()}', // Short ID
-          'medicine': productInfo?['name'] ?? 'Unknown Product',
-          'qty': item['quantity'].toString(),
-          'amount': '₹${amount.toStringAsFixed(0)}',
-          'status': (order['payment_status'] ?? 'Pending')
-              .toString(), // Raw status string for display
-          'date':
-              '${orderCreatedAt.day.toString().padLeft(2, '0')} ${_getMonthAbbr(orderCreatedAt.month)} ${orderCreatedAt.year}',
-        });
+        // Recent Transactions population (apply paymentStatus filter if set)
+        final txPaymentStatus = (order['payment_status'] ?? 'Pending')
+            .toString();
+        final matchesPayment =
+            paymentStatus == null ||
+            txPaymentStatus.toLowerCase() == paymentStatus.toLowerCase();
+        if (matchesPayment) {
+          recentTransactions.add({
+            'id':
+                '#ORD-${orderId.length >= 5 ? orderId.substring(0, 5).toUpperCase() : orderId.toUpperCase()}',
+            'medicine': productInfo?['name'] ?? 'Unknown Product',
+            'qty': item['quantity'].toString(),
+            'amount': '₹${amount.toStringAsFixed(0)}',
+            'status': txPaymentStatus,
+            'date':
+                '${orderCreatedAt.day.toString().padLeft(2, '0')} ${_getMonthAbbr(orderCreatedAt.month)} ${orderCreatedAt.year}',
+          });
+        }
 
         // Revenue rule: ONLY sum revenue if the item is delivered
         if (status == 'delivered') {
@@ -364,10 +372,15 @@ class SalesStatsService {
               (orderCreatedAt.isBefore(endDate.add(const Duration(days: 1))))) {
             totalRevenue += amount;
 
-            // Category Performance
-            final String category = productInfo?['category'] ?? 'Others';
-            categoryPerformance[category] =
-                (categoryPerformance[category] ?? 0) + amount;
+            // Category Performance (apply category filter if set)
+            final String itemCategory = productInfo?['category'] ?? 'Others';
+            final matchesCategory =
+                category == null ||
+                itemCategory.toLowerCase() == category.toLowerCase();
+            if (matchesCategory) {
+              categoryPerformance[itemCategory] =
+                  (categoryPerformance[itemCategory] ?? 0) + amount;
+            }
           }
         }
       }

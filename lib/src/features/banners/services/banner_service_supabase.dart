@@ -10,7 +10,7 @@ class BannerServiceSupabase {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   static const String _bannersTable = 'banners';
-  static const String _storageBucket = 'banner-image';
+  static const String _storageBucket = 'banner-images';
 
   // Create a new banner
   Future<String> createBanner({

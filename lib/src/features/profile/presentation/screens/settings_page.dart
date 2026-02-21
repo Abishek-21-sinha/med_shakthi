@@ -4,6 +4,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:med_shakthi/src/core/theme/theme_provider.dart';
 import 'privacy_policy_screen.dart';
+import 'package:med_shakthi/src/features/auth/presentation/screens/change_password_page.dart';
+import 'package:med_shakthi/src/features/cart/data/cart_data.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -58,6 +60,18 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 12),
           _tileButton(
+            title: "Change Password",
+            subtitle: "Update your login password",
+            icon: Icons.lock_outline,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ChangePasswordPage()),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          _tileButton(
             title: "Privacy Policy",
             subtitle: "View privacy policy",
             icon: Icons.privacy_tip_outlined,
@@ -75,9 +89,85 @@ class _SettingsPageState extends State<SettingsPage> {
             icon: Icons.info_outline,
             onTap: _showAboutAppDialog,
           ),
+          const SizedBox(height: 12),
+          _tileButton(
+            title: "Delete Account",
+            subtitle: "Permanently remove your account",
+            icon: Icons.delete_forever_outlined,
+            onTap: _handleDeleteAccount,
+            isDestructive: true,
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _handleDeleteAccount() async {
+    final passwordController = TextEditingController();
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Account'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'This action cannot be undone. Please enter your password to confirm.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && passwordController.text.isNotEmpty) {
+      if (!mounted) return;
+      final cartData = context.read<CartData>();
+      try {
+        final user = supabase.auth.currentUser;
+        if (user != null && user.email != null) {
+          await supabase.auth.signInWithPassword(
+            email: user.email!,
+            password: passwordController.text,
+          );
+          final deleteRes = await supabase.rpc('delete_current_user_debug');
+          if (deleteRes['success'] == false) {
+            throw Exception('Deletion failed: ${deleteRes['error']}');
+          }
+          cartData.clearLocalStateOnly();
+          await supabase.auth.signOut();
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Account deleted successfully')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+        }
+      }
+    }
   }
 
   Future<void> _showAboutAppDialog() async {
