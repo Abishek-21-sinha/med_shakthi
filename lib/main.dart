@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:app_links/app_links.dart';
+import 'package:med_shakthi/src/core/services/shiprocket_service.dart';
 
 // Providers
 import 'package:med_shakthi/src/features/cart/data/cart_data.dart';
@@ -19,6 +21,9 @@ import 'package:med_shakthi/src/features/dashboard/supplier_dashboard.dart';
 
 // 🔐 Reset Password Page
 import 'package:med_shakthi/src/features/auth/presentation/screens/reset_password_page.dart';
+// Product Page
+import 'package:med_shakthi/src/features/products/data/models/product_model.dart';
+import 'package:med_shakthi/src/features/products/presentation/screens/product_page.dart';
 
 /// 🔑 GLOBAL NAVIGATOR KEY (IMPORTANT)
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -28,6 +33,9 @@ Future<void> main() async {
 
   try {
     await dotenv.load(fileName: ".env");
+
+    // 🧪 Enable mock mode for delivery tracking (remove when real Shiprocket account added)
+    ShiprocketService.mockMode = true;
 
     final supabaseUrl = dotenv.env['SUPABASE_URL'];
     final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
@@ -105,9 +113,47 @@ class _RootRouterState extends State<RootRouter> {
   Session? _session;
   bool _isRecoveringPassword = false;
 
+  Future<void> _initDeepLinks() async {
+    final appLinks = AppLinks();
+    // Handle link when app was cold-started from a link
+    final initialUri = await appLinks.getInitialLink();
+    if (initialUri != null) {
+      _handleDeepLink(initialUri);
+    }
+    // Handle links while app is running
+    appLinks.uriLinkStream.listen(_handleDeepLink);
+  }
+
+  Future<void> _handleDeepLink(Uri uri) async {
+    // medshakthi://product/{productId}
+    if (uri.scheme == 'medshakthi' && uri.host == 'product') {
+      final productId = uri.pathSegments.isNotEmpty
+          ? uri.pathSegments.first
+          : null;
+      if (productId == null || productId.isEmpty) return;
+      try {
+        final res = await Supabase.instance.client
+            .from('products')
+            .select('*, suppliers(name, supplier_code, id)')
+            .eq('id', productId)
+            .maybeSingle();
+        if (res == null) return;
+        final product = Product.fromMap(res);
+        if (mounted) {
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(builder: (_) => ProductPage(product: product)),
+          );
+        }
+      } catch (e) {
+        debugPrint('Deep link navigation error: $e');
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _initDeepLinks();
 
     try {
       _session = Supabase.instance.client.auth.currentSession;
@@ -335,7 +381,7 @@ class _AuthGateState extends State<AuthGate> {
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) return;
 
-      // Check if they are a supplier
+      // Check if this user is a supplier
       final supplierData = await Supabase.instance.client
           .from('suppliers')
           .select('id')
@@ -343,16 +389,22 @@ class _AuthGateState extends State<AuthGate> {
           .maybeSingle();
 
       if (supplierData != null) {
+        // ── Supplier: save to suppliers table ──
         await Supabase.instance.client
             .from('suppliers')
             .update({'onesignal_player_id': playerId})
             .eq('user_id', user.id);
-        debugPrint(
-          "Successfully updated OneSignal Player ID for supplier: $playerId",
-        );
+        debugPrint('✅ OneSignal Player ID saved for supplier: $playerId');
+      } else {
+        // ── Regular user: save to users table ──
+        await Supabase.instance.client
+            .from('users')
+            .update({'onesignal_player_id': playerId})
+            .eq('id', user.id);
+        debugPrint('✅ OneSignal Player ID saved for user: $playerId');
       }
     } catch (e) {
-      debugPrint("Failed to update OneSignal Player ID: $e");
+      debugPrint('❌ Failed to update OneSignal Player ID: $e');
     }
   }
 
@@ -368,6 +420,15 @@ class _AuthGateState extends State<AuthGate> {
 
       if (user == null) {
         if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
+      // 🔐 SECURITY: Block unverified emails from accessing the app.
+      // emailConfirmedAt is null if the user has not clicked the verification link.
+      if (user.emailConfirmedAt == null) {
+        debugPrint('⚠️ Email not confirmed for ${user.email}. Signing out.');
+        await Supabase.instance.client.auth.signOut();
+        // Auth listener in RootRouter will reset _session → LoginPage shown automatically.
         return;
       }
 

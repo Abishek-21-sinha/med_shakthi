@@ -1,7 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -28,6 +30,7 @@ class _AddProductPageState extends State<AddProductPage> {
   final unitSizeController = TextEditingController();
   final supplierIdController = TextEditingController(text: 'Loading...');
   final expiryController = TextEditingController();
+  final descriptionController = TextEditingController();
 
   /// CUSTOM CATEGORY CONTROLLERS
   final customCategoryController = TextEditingController();
@@ -66,6 +69,22 @@ class _AddProductPageState extends State<AddProductPage> {
     if (isEditing) _initializeEditMode();
   }
 
+  @override
+  void dispose() {
+    nameController.dispose();
+    genericController.dispose();
+    brandController.dispose();
+    skuController.dispose();
+    priceController.dispose();
+    unitSizeController.dispose();
+    supplierIdController.dispose();
+    expiryController.dispose();
+    descriptionController.dispose();
+    customCategoryController.dispose();
+    customSubCategoryController.dispose();
+    super.dispose();
+  }
+
   void _initializeEditMode() {
     final p = widget.product!;
     nameController.text = p['name'] ?? '';
@@ -75,6 +94,7 @@ class _AddProductPageState extends State<AddProductPage> {
     priceController.text = p['price']?.toString() ?? '';
     unitSizeController.text = p['unit_size'] ?? '';
     expiryController.text = p['expiry_date'] ?? '';
+    descriptionController.text = p['description'] ?? '';
 
     // Set drop-downs if valid
     final cat = p['category'];
@@ -145,6 +165,23 @@ class _AddProductPageState extends State<AddProductPage> {
     }
   }
 
+  /// Compresses and resizes image bytes before uploading.
+  /// Targets max 1024px on the longer side, 80% JPEG quality.
+  Future<Uint8List> _compressImage(Uint8List bytes) async {
+    final result = await FlutterImageCompress.compressWithList(
+      bytes,
+      minWidth: 512,
+      minHeight: 512,
+      quality: 80,
+      format: CompressFormat.jpeg,
+    );
+    debugPrint(
+      '📸 Compressed: ${bytes.length} → ${result.length} bytes '
+      '(${((1 - result.length / bytes.length) * 100).toStringAsFixed(1)}% saved)',
+    );
+    return result;
+  }
+
   /// Uses uploadBinary (reads bytes first) — same proven approach as banner service.
   /// Passing a File object with a CroppedFile path can silently fail on Android.
   Future<String?> uploadImage() async {
@@ -154,8 +191,12 @@ class _AddProductPageState extends State<AddProductPage> {
     debugPrint('📸 Starting image upload: $fileName');
     debugPrint('📸 Cropped file path: ${croppedFile!.path}');
 
-    final bytes = await croppedFile!.readAsBytes();
-    debugPrint('📸 File size: ${bytes.length} bytes');
+    final rawBytes = await croppedFile!.readAsBytes();
+    debugPrint('📸 Original file size: ${rawBytes.length} bytes');
+
+    // Compress before uploading
+    final bytes = await _compressImage(rawBytes);
+    debugPrint('📸 Upload size: ${bytes.length} bytes');
 
     await supabase.storage
         .from('product-images')
@@ -215,6 +256,9 @@ class _AddProductPageState extends State<AddProductPage> {
         'supplier_code': supplierCode,
         'supplier_id': supplierId,
         'image_url': imageUrl,
+        'description': descriptionController.text.trim().isEmpty
+            ? null
+            : descriptionController.text.trim(),
       };
 
       if (isEditing) {
@@ -324,6 +368,7 @@ class _AddProductPageState extends State<AddProductPage> {
                       customSubCategoryController,
                     ),
                   ],
+                  _descriptionField(),
                   const SizedBox(height: 20),
                   _submitButton(),
                 ],
@@ -540,6 +585,20 @@ class _AddProductPageState extends State<AddProductPage> {
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide.none,
+      ),
+    );
+  }
+
+  Widget _descriptionField() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: TextFormField(
+        controller: descriptionController,
+        maxLines: 4,
+        keyboardType: TextInputType.multiline,
+        decoration: _inputDecoration(
+          'Description (optional)',
+        ).copyWith(alignLabelWithHint: true),
       ),
     );
   }
