@@ -266,6 +266,31 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
 
         //  Insert order details
         await supabase.from('order_details').insert(orderDetailRows);
+
+        // Deduct stock levels for purchased items
+        for (var item in items) {
+          try {
+            // Fetch current stock, subtract quantity, then update.
+            // A Supabase RPC would be more race-condition resistant, but this works.
+            final pRes = await supabase
+                .from('products')
+                .select('stock_quantity')
+                .eq('id', item.id)
+                .maybeSingle();
+
+            if (pRes != null) {
+              final currentStock = pRes['stock_quantity'] as int? ?? 0;
+              final newStock = currentStock - item.quantity;
+              await supabase
+                  .from('products')
+                  .update({'stock_quantity': newStock < 0 ? 0 : newStock})
+                  .eq('id', item.id);
+            }
+          } catch (e) {
+            debugPrint("Failed to deduct stock for product ${item.id}: $e");
+          }
+        }
+
         // print("Calling Edge Function for supplier: $supplierId");
 
         // CALL EDGE FUNCTION HERE (AFTER INSERT)

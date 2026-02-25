@@ -129,7 +129,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       ),
     );
     if (confirmed == true && mounted) {
-      await updateOrderStatus('Cancelled', reason: reasonCtrl.text.trim());
+      await updateOrderStatus('cancelled', reason: reasonCtrl.text.trim());
     }
   }
 
@@ -398,7 +398,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
           Expanded(
             flex: 2,
             child: ElevatedButton.icon(
-              onPressed: () => updateOrderStatus('Confirmed'),
+              onPressed: () => updateOrderStatus('confirmed'),
               icon: const Icon(Icons.check, size: 18),
               label: const Text('Accept Order'),
               style: ElevatedButton.styleFrom(
@@ -418,7 +418,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       return SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
-          onPressed: () => updateOrderStatus('Shipped'),
+          onPressed: () => updateOrderStatus('shipped'),
           icon: const Icon(Icons.local_shipping_outlined, size: 18),
           label: const Text(
             'Mark as Shipped',
@@ -439,7 +439,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       return SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
-          onPressed: () => updateOrderStatus('Delivered'),
+          onPressed: () => updateOrderStatus('delivered'),
           icon: const Icon(Icons.done_all, size: 18),
           label: const Text(
             'Mark as Delivered',

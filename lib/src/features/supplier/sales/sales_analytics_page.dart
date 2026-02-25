@@ -227,9 +227,9 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
           final isSelected = _selectedDateRange == range;
           return Expanded(
             child: GestureDetector(
-              onTap: () {
+              onTap: () async {
                 if (range == 'Custom') {
-                  _showDateRangePicker(context);
+                  await _showDateRangePicker(context);
                 } else {
                   setState(() => _selectedDateRange = range);
                   _applyFiltersAndRefetch();
@@ -417,7 +417,11 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
       physics: const BouncingScrollPhysics(),
       child: Row(
         children: [
-          _buildFilterChip('📅 $_selectedDateRange', isDark, () {}),
+          _buildFilterChip(
+            '📅 $_selectedDateRange',
+            isDark,
+            () => _showFilterBottomSheet(context),
+          ),
           const SizedBox(width: 8),
           _buildFilterChip(
             '🗂 Category: $_selectedCategory',
@@ -1257,7 +1261,13 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                               : null,
                         ),
                         onSelected: (selected) {
-                          setModalState(() => _selectedDateRange = range);
+                          if (range == 'Custom') {
+                            Navigator.pop(context);
+                            _showDateRangePicker(context);
+                          } else {
+                            setModalState(() => _selectedDateRange = range);
+                            setState(() => _selectedDateRange = range);
+                          }
                         },
                       );
                     }).toList(),
@@ -1287,6 +1297,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                             ),
                             onSelected: (selected) {
                               setModalState(() => _selectedCategory = category);
+                              setState(() => _selectedCategory = category);
                             },
                           );
                         }).toList(),
@@ -1310,6 +1321,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                         ),
                         onSelected: (selected) {
                           setModalState(() => _selectedPaymentStatus = status);
+                          setState(() => _selectedPaymentStatus = status);
                         },
                       );
                     }).toList(),

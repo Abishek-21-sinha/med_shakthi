@@ -1,6 +1,11 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:med_shakthi/src/features/cart/data/cart_data.dart';
+import 'package:med_shakthi/src/features/cart/data/cart_item.dart';
+import 'package:med_shakthi/src/features/cart/presentation/screens/cart_page.dart';
+import 'package:med_shakthi/src/core/utils/custom_snackbar.dart';
 import 'package:med_shakthi/src/features/products/presentation/screens/product_page.dart';
 import 'package:med_shakthi/src/features/products/data/models/product_model.dart';
-import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:med_shakthi/src/features/orders/models/order_detail_model.dart';
 import 'package:med_shakthi/src/core/utils/smart_product_image.dart';
@@ -267,7 +272,130 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 );
               },
             ),
+      bottomNavigationBar: _items.isNotEmpty && !_loading
+          ? _buildReorderBottomBar(context, Theme.of(context).primaryColor)
+          : null,
     );
+  }
+
+  Widget _buildReorderBottomBar(BuildContext context, Color themeColor) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: SizedBox(
+          height: 48,
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () => _handleReorder(context),
+            icon: const Icon(Icons.shopping_cart_checkout),
+            label: const Text(
+              "Reorder Items",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00B894),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleReorder(BuildContext context) async {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+
+      final cartData = context.read<CartData>();
+      int itemsAdded = 0;
+      int itemsSkipped = 0;
+
+      for (var item in _items) {
+        if (item.productId == null) continue;
+
+        // Fetch fresh product info to check stock and active status
+        final pRes = await supabase
+            .from('products')
+            .select('stock_quantity, is_active, price')
+            .eq('id', item.productId!)
+            .maybeSingle();
+
+        if (pRes == null) {
+          itemsSkipped++;
+          continue;
+        }
+
+        final isActive = pRes['is_active'] == true;
+        final stock = pRes['stock_quantity'] as int? ?? 0;
+        final currentPrice = (pRes['price'] as num?)?.toDouble() ?? item.price;
+
+        if (!isActive || stock <= 0) {
+          itemsSkipped++;
+          continue;
+        }
+
+        // Add to cart (limit to stock if previously ordered quantity exceeds current stock)
+        final quantityToAdd = item.qty > stock ? stock : item.qty;
+
+        cartData.addItem(
+          CartItem(
+            id: item.productId!,
+            name: item.itemName,
+            title: item.itemName,
+            brand: "General",
+            size: item.unitSize,
+            price: currentPrice,
+            imagePath: item.imageUrl,
+            imageUrl: item.imageUrl,
+            quantity: quantityToAdd,
+          ),
+        );
+        itemsAdded++;
+      }
+
+      if (!context.mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      if (itemsAdded > 0) {
+        showCustomSnackBar(
+          context,
+          itemsSkipped > 0
+              ? "Added $itemsAdded items to cart. Some items were out of stock or unavailable."
+              : "All items added to cart successfully!",
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const CartPage()),
+        );
+      } else {
+        showCustomSnackBar(
+          context,
+          "Sorry, none of these items are currently available for reorder.",
+          isError: true,
+        );
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      Navigator.pop(context); // Close loading
+      showCustomSnackBar(context, "Failed to reorder items: $e", isError: true);
+    }
   }
 
   double _calculateSubtotal() {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:med_shakthi/src/core/utils/custom_snackbar.dart';
 import 'login_page.dart';
 
 class ChangePasswordPage extends StatefulWidget {
@@ -65,24 +66,14 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       if (widget.isRecoveryFlow) {
         await supabase.auth.signOut();
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Password updated! Please log in.'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        showCustomSnackBar(context, 'Password updated! Please log in.');
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const LoginPage()),
           (_) => false,
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Password changed successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        showCustomSnackBar(context, 'Password changed successfully!');
         Navigator.pop(context);
       }
     } on AuthException catch (e) {
@@ -96,12 +87,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
   void _show(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: Theme.of(context).colorScheme.error,
-      ),
-    );
+    showCustomSnackBar(context, msg, isError: true);
   }
 
   @override

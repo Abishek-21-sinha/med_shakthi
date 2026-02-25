@@ -620,6 +620,17 @@ class _BottomBarState extends State<_BottomBar> {
   Widget build(BuildContext context) {
     if (isLoadingRole || isSupplier) return const SizedBox.shrink();
 
+    final isOutOfStock = widget.product.stockQuantity <= 0;
+    final isInactive = !widget.product.isActive;
+    final isUnavailable = isOutOfStock || isInactive;
+
+    String buttonText = "Add to Cart  •  ₹${widget.product.price}";
+    if (isInactive) {
+      buttonText = "Currently Unavailable";
+    } else if (isOutOfStock) {
+      buttonText = "Out of Stock";
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -637,38 +648,41 @@ class _BottomBarState extends State<_BottomBar> {
           height: 48,
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: () {
-              context.read<CartData>().addItem(
-                CartItem(
-                  id: widget.product.id,
-                  name: widget.product.name,
-                  title: widget.product.name,
-                  brand: widget.product.category,
-                  size: 'Standard',
-                  price: widget.product.price,
-                  imagePath: widget.product.image,
-                  imageUrl: widget.product.image,
-                ),
-              );
+            onPressed: isUnavailable
+                ? null
+                : () {
+                    context.read<CartData>().addItem(
+                      CartItem(
+                        id: widget.product.id,
+                        name: widget.product.name,
+                        title: widget.product.name,
+                        brand: widget.product.category,
+                        size: 'Standard',
+                        price: widget.product.price,
+                        imagePath: widget.product.image,
+                        imageUrl: widget.product.image,
+                      ),
+                    );
 
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const CartPage()),
-              );
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const CartPage()),
+                    );
 
-              HapticFeedback.lightImpact();
-            },
+                    HapticFeedback.lightImpact();
+                  },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00B894),
+              backgroundColor: isUnavailable
+                  ? Colors.grey
+                  : const Color(0xFF00B894),
               foregroundColor: Colors.white,
+              disabledBackgroundColor: Colors.grey.shade400,
+              disabledForegroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
               ),
             ),
-            child: Text(
-              "Add to Cart  •  ₹${widget.product.price}",
-              style: const TextStyle(fontSize: 16),
-            ),
+            child: Text(buttonText, style: const TextStyle(fontSize: 16)),
           ),
         ),
       ),

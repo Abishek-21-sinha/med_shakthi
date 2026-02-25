@@ -7,6 +7,7 @@ import 'package:med_shakthi/src/core/api/supabase_service.dart';
 import 'package:med_shakthi/src/core/utils/indian_validators.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:med_shakthi/main.dart'; // Import RootRouter
+import 'package:med_shakthi/src/core/utils/custom_snackbar.dart';
 
 class SupplierSignupPage extends StatefulWidget {
   const SupplierSignupPage({super.key});
@@ -234,9 +235,7 @@ class _SupplierSignupPageState extends State<SupplierSignupPage> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
-    );
+    showCustomSnackBar(context, message, isError: true);
   }
 
   @override

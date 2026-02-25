@@ -42,10 +42,13 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
     }
 
     try {
-      dynamic query = supabase.from('products').select('''
+      dynamic query = supabase
+          .from('products')
+          .select('''
         *,
         suppliers!inner(name, supplier_code, id)
-      ''');
+      ''')
+          .eq('is_active', true);
 
       // Category Filter (Always apply)
       query = query.ilike('category', '%${widget.categoryName}%');
