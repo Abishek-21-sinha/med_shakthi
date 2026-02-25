@@ -10,7 +10,10 @@ class ProductRepository {
     try {
       final response = await _supabase
           .from('products')
-          .select('*, suppliers(name, supplier_code, id)')
+          .select(
+            '*, suppliers(name, supplier_code, id), product_reviews(rating)',
+          )
+          .eq('is_active', true)
           .order('created_at', ascending: false); // Newest first
 
       // --- DEBUG PRINT ---
@@ -32,7 +35,9 @@ class ProductRepository {
     try {
       final response = await _supabase
           .from('products')
-          .select()
+          .select(
+            '*, suppliers(name, supplier_code, id), product_reviews(rating)',
+          )
           .eq('supplier_code', supplierCode) // Filter by supplier
           .order('created_at', ascending: false);
 

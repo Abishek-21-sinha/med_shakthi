@@ -4,6 +4,7 @@ import 'add_product_page.dart';
 
 import 'package:med_shakthi/src/features/products/data/models/product_model.dart';
 import 'package:med_shakthi/src/core/utils/smart_product_image.dart';
+import 'package:med_shakthi/src/core/utils/custom_snackbar.dart';
 import 'supplier_product_details_page.dart';
 
 class MyProductsPage extends StatefulWidget {
@@ -20,16 +21,32 @@ class _MyProductsPageState extends State<MyProductsPage> {
     try {
       await supabase.from('products').delete().eq('id', productId);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Product deleted successfully")),
-        );
+        showCustomSnackBar(context, "Product deleted successfully");
         setState(() {}); // Refresh list
+      }
+    } on PostgrestException catch (e) {
+      if (mounted) {
+        if (e.code == '23503') {
+          showCustomSnackBar(
+            context,
+            "Cannot delete product: It is already part of an existing order.",
+            isError: true,
+          );
+        } else {
+          showCustomSnackBar(
+            context,
+            "Database error: ${e.message}",
+            isError: true,
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
+        showCustomSnackBar(
           context,
-        ).showSnackBar(SnackBar(content: Text("Error deleting product: $e")));
+          "Error deleting product: $e",
+          isError: true,
+        );
       }
     }
   }
@@ -152,6 +169,8 @@ class _MyProductsPageState extends State<MyProductsPage> {
     final productName = p['name'] ?? "Unnamed Product";
     final category = p['category'] ?? "No Category";
     final price = p['price']?.toString() ?? "0.00";
+    final stockQuantity = p['stock_quantity'] as int? ?? 0;
+    final isActive = p['is_active'] as bool? ?? true;
 
     return InkWell(
       onTap: () {
@@ -223,6 +242,58 @@ class _MyProductsPageState extends State<MyProductsPage> {
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
                     ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      if (!isActive)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          margin: const EdgeInsets.only(right: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            "HIDDEN",
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ),
+                      if (stockQuantity <= 0)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            "OUT OF STOCK",
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red,
+                            ),
+                          ),
+                        )
+                      else
+                        Text(
+                          "Stock: $stockQuantity",
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),

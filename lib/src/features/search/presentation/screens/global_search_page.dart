@@ -64,10 +64,13 @@ class _GlobalSearchPageState extends State<GlobalSearchPage> {
     setState(() => loading = true);
 
     try {
-      dynamic query = supabase.from('products').select('''
+      dynamic query = supabase
+          .from('products')
+          .select('''
         *,
         suppliers!inner(name, supplier_code, id)
-      ''');
+      ''')
+          .eq('is_active', true);
 
       // Search Filter (Server-side)
       if (_searchQuery.isNotEmpty) {

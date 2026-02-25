@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:med_shakthi/src/core/utils/custom_snackbar.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
   const ForgotPasswordPage({super.key});
@@ -16,9 +17,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     final email = _emailController.text.trim();
 
     if (email.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please enter your email')));
+      showCustomSnackBar(context, 'Please enter your email', isError: true);
       return;
     }
 
@@ -32,18 +31,11 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Password reset link sent to your email'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      showCustomSnackBar(context, 'Password reset link sent to your email');
 
       Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-      );
+      showCustomSnackBar(context, 'Error: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

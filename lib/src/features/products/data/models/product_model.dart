@@ -22,6 +22,10 @@ class Product {
   final String? customCategory;
   final String? customSubCategory;
 
+  // Stock Management (Phase 4)
+  final int stockQuantity;
+  final bool isActive;
+
   Product({
     required this.id,
     required this.name,
@@ -41,6 +45,8 @@ class Product {
     this.subCategory,
     this.customCategory,
     this.customSubCategory,
+    this.stockQuantity = 0,
+    this.isActive = true,
   });
 
   // Supabase Map -> Product
@@ -48,12 +54,25 @@ class Product {
     // Handle nested supplier data from join
     final supplierData = map['suppliers'] as Map<String, dynamic>?;
 
+    // Calculate average rating from nested product_reviews if available
+    final reviews = map['product_reviews'] as List<dynamic>?;
+    double calculatedRating = 0.0;
+    if (reviews != null && reviews.isNotEmpty) {
+      final total = reviews.fold(
+        0.0,
+        (sum, item) => sum + ((item['rating'] as num?)?.toDouble() ?? 0.0),
+      );
+      calculatedRating = total / reviews.length;
+    } else {
+      calculatedRating = (map['rating'] as num?)?.toDouble() ?? 0.0;
+    }
+
     return Product(
       id: map['id'].toString(), //  UUID safe
       name: map['name'] ?? '',
       category: map['category'] ?? '',
       price: (map['price'] as num?)?.toDouble() ?? 0.0,
-      rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
+      rating: calculatedRating,
       image: map['image_url'] ?? '',
       description: map['description'] as String?,
       supplierName: supplierData?['name'] as String?,
@@ -67,6 +86,8 @@ class Product {
       subCategory: map['sub_category'] as String?,
       customCategory: map['custom_category'] as String?,
       customSubCategory: map['custom_sub_category'] as String?,
+      stockQuantity: map['stock_quantity'] as int? ?? 0,
+      isActive: map['is_active'] as bool? ?? true,
     );
   }
 
@@ -92,6 +113,8 @@ class Product {
       'custom_category': customCategory,
       'custom_sub_category': customSubCategory,
       'supplier_code': supplierCode,
+      'stock_quantity': stockQuantity,
+      'is_active': isActive,
     };
   }
 }

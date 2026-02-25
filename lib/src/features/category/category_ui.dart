@@ -29,6 +29,7 @@ class _CategoryPageNewState extends State<CategoryPageNew> {
       final response = await supabase
           .from('products')
           .select('category')
+          .eq('is_active', true)
           .withConverter<List<String>>((data) {
             final list = data as List<dynamic>;
             return list

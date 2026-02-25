@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:med_shakthi/main.dart';
+import 'package:med_shakthi/src/core/utils/custom_snackbar.dart';
 import 'package:med_shakthi/src/core/widgets/app_logo.dart';
 
 import 'login_page.dart';
@@ -305,11 +306,10 @@ class _SignupPageState extends State<SignupPage> {
     if (!_formKey.currentState!.validate()) return;
 
     if (!_acceptTerms) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please accept terms & conditions'),
-          backgroundColor: Colors.redAccent,
-        ),
+      showCustomSnackBar(
+        context,
+        'Please accept terms & conditions',
+        isError: true,
       );
       return;
     }
@@ -362,16 +362,11 @@ class _SignupPageState extends State<SignupPage> {
         throw Exception('Signup failed. Try again.');
       }
 
-      // 🧾 Step 2: Insert into users table
-      // Use upsert to handle potential duplicate key errors OR reactivate deleted public profile
-      await supabase.from('users').upsert({
-        'id': user.id, // MUST match auth.users.id
-        'name': fullName,
-        'email': email,
-        'phone': phone,
-        // Only set created_at if new? Upsert handles it.
-        // If reacting, we might want to update updated_at if we had it.
-      }, onConflict: 'id');
+      // ✅ User profile created automatically via DB trigger (handle_new_user)
+      // which runs as SECURITY DEFINER and picks up full_name + phone from
+      // raw_user_meta_data passed in signUp() above.
+      // No manual upsert needed — avoids RLS 42501 when email confirmation
+      // is enabled (session is null until email is verified).
 
       if (!mounted) return;
 
@@ -403,19 +398,10 @@ class _SignupPageState extends State<SignupPage> {
       }
     } on AuthException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.message),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-        ),
-      );
+      showCustomSnackBar(context, e.message, isError: true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
-      );
+      showCustomSnackBar(context, 'Error: $e', isError: true);
     } finally {
       RootRouter.suppressAuthRedirect = false;
       if (mounted) setState(() => _isLoading = false);

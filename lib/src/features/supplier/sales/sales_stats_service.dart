@@ -273,6 +273,14 @@ class SalesStatsService {
         });
       }
 
+      // ── Date range filter helper ────────────────────────────────────────────
+      bool inRange(DateTime dt) {
+        final d = DateTime(dt.year, dt.month, dt.day);
+        final s = DateTime(startDate.year, startDate.month, startDate.day);
+        final e = DateTime(endDate.year, endDate.month, endDate.day);
+        return !d.isBefore(s) && !d.isAfter(e);
+      }
+
       for (var item in orderDetailsList) {
         final Map<String, dynamic> order =
             item['orders'] as Map<String, dynamic>;
@@ -289,6 +297,9 @@ class SalesStatsService {
         final String userId = order['user_id'] ?? '';
         final String productId = item['product_id'] ?? '';
 
+        // ── Skip items outside the selected date range for all aggregations ──
+        if (!inRange(orderCreatedAt)) continue;
+
         if (orderId.isNotEmpty) {
           uniqueOrders.add(orderId);
           orderStatuses[orderId] = status;
@@ -297,7 +308,7 @@ class SalesStatsService {
           }
         }
 
-        // Customers rule: count unique customers who have an active order not yet delivered
+        // Customers: count unique customers with an active order
         if (userId.isNotEmpty &&
             ['pending', 'confirmed', 'shipped', 'cancelled'].contains(status)) {
           uniqueClients.add(userId);
@@ -315,7 +326,7 @@ class SalesStatsService {
           }
         }
 
-        // Recent Transactions population (apply paymentStatus filter if set)
+        // Recent Transactions (apply paymentStatus filter if set)
         final txPaymentStatus = (order['payment_status'] ?? 'Pending')
             .toString();
         final matchesPayment =
@@ -334,13 +345,10 @@ class SalesStatsService {
           });
         }
 
-        // Revenue rule: ONLY sum revenue if the item is delivered
+        // Revenue: only count delivered orders
         if (status == 'delivered') {
-          // Time-agnostic metrics
-          if (orderCreatedAt.isAfter(today)) {
-            todayRevenue += amount;
-          }
-
+          // Time-agnostic metrics for comparison periods
+          if (orderCreatedAt.isAfter(today)) todayRevenue += amount;
           if (orderCreatedAt.isAfter(firstDayThisMonth)) {
             thisMonthRevenue += amount;
           } else if (orderCreatedAt.isAfter(firstDayLastMonth) &&
@@ -348,7 +356,9 @@ class SalesStatsService {
             lastMonthRevenue += amount;
           }
 
-          // Generate trend points regardless of selected dateRange filter, helps visualize the time window
+          totalRevenue += amount;
+
+          // Sales trend bucket
           final Duration diff =
               DateTime(endDate.year, endDate.month, endDate.day).difference(
                 DateTime(
@@ -366,21 +376,14 @@ class SalesStatsService {
             }
           }
 
-          // DateRange based filtering
-          if ((orderCreatedAt.isAfter(startDate) ||
-                  orderCreatedAt.isAtSameMomentAs(startDate)) &&
-              (orderCreatedAt.isBefore(endDate.add(const Duration(days: 1))))) {
-            totalRevenue += amount;
-
-            // Category Performance (apply category filter if set)
-            final String itemCategory = productInfo?['category'] ?? 'Others';
-            final matchesCategory =
-                category == null ||
-                itemCategory.toLowerCase() == category.toLowerCase();
-            if (matchesCategory) {
-              categoryPerformance[itemCategory] =
-                  (categoryPerformance[itemCategory] ?? 0) + amount;
-            }
+          // Category Performance (apply category filter if set)
+          final String itemCategory = productInfo?['category'] ?? 'Others';
+          final matchesCategory =
+              category == null ||
+              itemCategory.toLowerCase() == category.toLowerCase();
+          if (matchesCategory) {
+            categoryPerformance[itemCategory] =
+                (categoryPerformance[itemCategory] ?? 0) + amount;
           }
         }
       }

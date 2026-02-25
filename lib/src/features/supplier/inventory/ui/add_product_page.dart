@@ -31,8 +31,9 @@ class _AddProductPageState extends State<AddProductPage> {
   final supplierIdController = TextEditingController(text: 'Loading...');
   final expiryController = TextEditingController();
   final descriptionController = TextEditingController();
+  final stockController = TextEditingController(text: '0');
 
-  /// CUSTOM CATEGORY CONTROLLERS
+  /// CATEGORY + SUBCATEGORY
   final customCategoryController = TextEditingController();
   final customSubCategoryController = TextEditingController();
 
@@ -61,6 +62,7 @@ class _AddProductPageState extends State<AddProductPage> {
   String? supplierId;
   bool _isLoading = false;
   String _loadingStatus = '';
+  bool isActive = true;
 
   @override
   void initState() {
@@ -79,9 +81,9 @@ class _AddProductPageState extends State<AddProductPage> {
     unitSizeController.dispose();
     supplierIdController.dispose();
     expiryController.dispose();
-    descriptionController.dispose();
     customCategoryController.dispose();
     customSubCategoryController.dispose();
+    stockController.dispose();
     super.dispose();
   }
 
@@ -95,6 +97,8 @@ class _AddProductPageState extends State<AddProductPage> {
     unitSizeController.text = p['unit_size'] ?? '';
     expiryController.text = p['expiry_date'] ?? '';
     descriptionController.text = p['description'] ?? '';
+    stockController.text = p['stock_quantity']?.toString() ?? '0';
+    isActive = p['is_active'] ?? true;
 
     // Set drop-downs if valid
     final cat = p['category'];
@@ -259,6 +263,8 @@ class _AddProductPageState extends State<AddProductPage> {
         'description': descriptionController.text.trim().isEmpty
             ? null
             : descriptionController.text.trim(),
+        'stock_quantity': int.tryParse(stockController.text) ?? 0,
+        'is_active': isActive,
       };
 
       if (isEditing) {
@@ -357,6 +363,11 @@ class _AddProductPageState extends State<AddProductPage> {
                     priceController,
                     keyboard: TextInputType.number,
                   ),
+                  _input(
+                    "Stock Quantity",
+                    stockController,
+                    keyboard: TextInputType.number,
+                  ),
                   _supplierIdField(),
                   _expiryField(),
                   _categoryDropdown(),
@@ -369,6 +380,18 @@ class _AddProductPageState extends State<AddProductPage> {
                     ),
                   ],
                   _descriptionField(),
+                  const SizedBox(height: 10),
+                  SwitchListTile(
+                    title: const Text("Product is Active / Visible"),
+                    subtitle: const Text(
+                      "Turn off to hide this product from customers",
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    value: isActive,
+                    activeThumbColor: const Color(0xFF4CA6A8),
+                    onChanged: (val) => setState(() => isActive = val),
+                    contentPadding: EdgeInsets.zero,
+                  ),
                   const SizedBox(height: 20),
                   _submitButton(),
                 ],
