@@ -385,7 +385,9 @@ class _SignupPageState extends State<SignupPage> {
           barrierDismissible: false,
           builder: (context) => AlertDialog(
             title: const Text('Signup Successful'),
-            content: const Text('Your account has been created successfully!'),
+            content: const Text(
+              'Your account has been created successfully!\n\nPlease check your email to verify your account before logging in.',
+            ),
             actions: [
               TextButton(
                 onPressed: () {
@@ -393,7 +395,7 @@ class _SignupPageState extends State<SignupPage> {
                   // Pop back to RootRouter, which will evaluate AuthGate
                   Navigator.of(context).popUntil((route) => route.isFirst);
                 },
-                child: const Text('Continue to Dashboard'),
+                child: const Text('OK'),
               ),
             ],
           ),

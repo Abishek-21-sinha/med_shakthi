@@ -201,16 +201,26 @@ class _SupplierSignupPageState extends State<SupplierSignupPage> {
 
       // ✅ SUCCESS UI & NAVIGATION
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Registration Submitted! Welcome.'),
-            backgroundColor: Colors.green,
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text('Registration Submitted'),
+            content: const Text(
+              'Welcome to Med Shakthi!\n\nPlease check your email to verify your account. You must verify your email before logging in.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context); // Close dialog
+                  // Pop back to RootRouter
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                },
+                child: const Text('OK'),
+              ),
+            ],
           ),
         );
-
-        // Pop back to RootRouter. Since signup finished, AuthGate will evaluate
-        // to SupplierDashboard automatically with fresh data.
-        Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } on AuthException catch (e) {
       RootRouter.suppressAuthRedirect = false;

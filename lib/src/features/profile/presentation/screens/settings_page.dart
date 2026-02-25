@@ -16,111 +16,180 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   final supabase = Supabase.instance.client;
-
-  bool _notification = true;
+  bool _notificationsEnabled = true;
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDark = themeProvider.isDarkMode;
+    final primary = const Color(0xFF6AA39B);
+    final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
-          "Settings",
+          'Settings',
           style: TextStyle(
-            color: Theme.of(context).appBarTheme.foregroundColor,
+            color: theme.appBarTheme.foregroundColor,
+            fontWeight: FontWeight.w700,
           ),
         ),
         centerTitle: true,
-        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         elevation: 0,
-        iconTheme: Theme.of(context).appBarTheme.iconTheme,
+        iconTheme: theme.appBarTheme.iconTheme,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          _tileSwitch(
-            title: "Notifications",
-            subtitle: "Enable/Disable notifications",
-            value: _notification,
-            onChanged: (v) {
-              setState(() => _notification = v);
-            },
+          // ── Section: App Preferences ────────────────────────
+          _sectionLabel('App Preferences'),
+          const SizedBox(height: 10),
+          _SettingsCard(
+            children: [
+              _ToggleTile(
+                icon: Icons.notifications_outlined,
+                iconColor: Colors.orange,
+                title: 'Notifications',
+                subtitle: 'Push notifications for orders & offers',
+                value: _notificationsEnabled,
+                onChanged: (v) => setState(() => _notificationsEnabled = v),
+              ),
+              const _Divider(),
+              _ToggleTile(
+                icon: Icons.dark_mode_outlined,
+                iconColor: Colors.indigo,
+                title: 'Dark Mode',
+                subtitle: 'Switch to dark theme',
+                value: isDark,
+                onChanged: (_) => themeProvider.toggleTheme(),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          _tileSwitch(
-            title: "Dark Mode",
-            subtitle: "Enable dark theme",
-            value: isDark,
-            onChanged: (v) {
-              themeProvider.toggleTheme();
-            },
+
+          const SizedBox(height: 20),
+
+          // ── Section: Account & Security ─────────────────────
+          _sectionLabel('Account & Security'),
+          const SizedBox(height: 10),
+          _SettingsCard(
+            children: [
+              _NavTile(
+                icon: Icons.lock_reset_outlined,
+                iconColor: Colors.blue,
+                title: 'Change Password',
+                subtitle: 'Update your login password',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ChangePasswordPage()),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          _tileButton(
-            title: "Change Password",
-            subtitle: "Update your login password",
-            icon: Icons.lock_outline,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ChangePasswordPage()),
-              );
-            },
+
+          const SizedBox(height: 20),
+
+          // ── Section: Legal ───────────────────────────────────
+          _sectionLabel('Legal & Info'),
+          const SizedBox(height: 10),
+          _SettingsCard(
+            children: [
+              _NavTile(
+                icon: Icons.privacy_tip_outlined,
+                iconColor: Colors.teal,
+                title: 'Privacy Policy',
+                subtitle: 'How we use your data',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PrivacyPolicyScreen(),
+                  ),
+                ),
+              ),
+              const _Divider(),
+              _NavTile(
+                icon: Icons.info_outline_rounded,
+                iconColor: primary,
+                title: 'About App',
+                subtitle: 'Version & developer info',
+                onTap: _showAboutDialog,
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          _tileButton(
-            title: "Privacy Policy",
-            subtitle: "View privacy policy",
-            icon: Icons.privacy_tip_outlined,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-          _tileButton(
-            title: "About App",
-            subtitle: "Version & details",
-            icon: Icons.info_outline,
-            onTap: _showAboutAppDialog,
-          ),
-          const SizedBox(height: 12),
-          _tileButton(
-            title: "Delete Account",
-            subtitle: "Permanently remove your account",
-            icon: Icons.delete_forever_outlined,
-            onTap: _handleDeleteAccount,
-            isDestructive: true,
+
+          const SizedBox(height: 20),
+
+          // ── Section: Danger Zone ──────────────────────────────
+          _sectionLabel('Danger Zone'),
+          const SizedBox(height: 10),
+          _SettingsCard(
+            isDanger: true,
+            children: [
+              _NavTile(
+                icon: Icons.delete_forever_outlined,
+                iconColor: Colors.redAccent,
+                title: 'Delete Account',
+                subtitle: 'Permanently remove your account and data',
+                onTap: _handleDeleteAccount,
+                isDestructive: true,
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
+  Widget _sectionLabel(String label) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.2,
+          color: Theme.of(
+            context,
+          ).textTheme.bodySmall?.color?.withValues(alpha: 0.5),
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleDeleteAccount() async {
     final passwordController = TextEditingController();
-    final bool? confirmed = await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Account'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: const [
+            Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+            SizedBox(width: 8),
+            Text(
+              'Delete Account',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'This action cannot be undone. Please enter your password to confirm.',
+              'This action cannot be undone. All your data, orders, and preferences will be permanently deleted.',
+              style: TextStyle(fontSize: 13),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: passwordController,
               obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Password',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: 'Enter your password to confirm',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ],
@@ -131,9 +200,15 @@ class _SettingsPageState extends State<SettingsPage> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -170,124 +245,213 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Future<void> _showAboutAppDialog() async {
+  Future<void> _showAboutDialog() async {
     final packageInfo = await PackageInfo.fromPlatform();
-    final String version = packageInfo.version;
-    final String buildNumber = packageInfo.buildNumber;
-
     if (!mounted) return;
-
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
-            Icon(Icons.info, color: Color(0xFF6AA39B)),
+            Icon(Icons.local_pharmacy_rounded, color: Color(0xFF6AA39B)),
             SizedBox(width: 10),
-            Text("About App", style: TextStyle(fontWeight: FontWeight.bold)),
+            Text('About App', style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              "Med Shakthi",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).textTheme.titleLarge?.color,
-              ),
+            const Text(
+              'Med Shakthi',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
             Text(
-              "Version: $version ($buildNumber)",
+              'Version ${packageInfo.version} (${packageInfo.buildNumber})',
               style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
             ),
             const SizedBox(height: 16),
             const Text(
-              "A Flutter-based internship project developed under UptoSkills.",
-              style: TextStyle(fontSize: 14),
+              'A Flutter-based pharmacy platform connecting suppliers and customers.',
+              style: TextStyle(fontSize: 13),
             ),
             const SizedBox(height: 8),
             const Text(
-              "Developed by: Flutter Interns",
-              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+              'Developed by: Flutter Interns @ UptoSkills',
+              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("OK", style: TextStyle(color: Color(0xFF6AA39B))),
+            child: const Text('OK', style: TextStyle(color: Color(0xFF6AA39B))),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _tileSwitch({
-    required String title,
-    required String subtitle,
-    required bool value,
-    required Function(bool) onChanged,
-  }) {
+/* ─────────────── Settings Card ─────────────── */
+
+class _SettingsCard extends StatelessWidget {
+  final List<Widget> children;
+  final bool isDanger;
+
+  const _SettingsCard({required this.children, this.isDanger = false});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(14),
+        color: isDanger
+            ? Colors.redAccent.withValues(alpha: 0.04)
+            : Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: isDanger
+            ? Border.all(color: Colors.redAccent.withValues(alpha: 0.15))
+            : null,
+        boxShadow: isDanger
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
       ),
-      child: SwitchListTile(
-        value: value,
-        onChanged: onChanged,
-        activeThumbColor: const Color(0xFF6AA39B),
-        title: Text(
-          title,
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            color: Theme.of(context).textTheme.bodyLarge?.color,
+      child: Column(children: children),
+    );
+  }
+}
+
+class _Divider extends StatelessWidget {
+  const _Divider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Divider(
+      height: 1,
+      indent: 60,
+      color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
+    );
+  }
+}
+
+/* ─────────────── Toggle Tile ─────────────── */
+
+class _ToggleTile extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _ToggleTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 18, color: iconColor),
           ),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: TextStyle(
-            color: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.color?.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeThumbColor: const Color(0xFF6AA39B),
+            activeTrackColor: const Color(0xFF6AA39B).withValues(alpha: 0.4),
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ],
       ),
     );
   }
+}
 
-  Widget _tileButton({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required VoidCallback onTap,
-    bool isDestructive = false,
-  }) {
-    final color = isDestructive ? Colors.redAccent : const Color(0xFF6AA39B);
+/* ─────────────── Nav Tile ─────────────── */
+
+class _NavTile extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final bool isDestructive;
+
+  const _NavTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.isDestructive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isDestructive ? Colors.redAccent : null;
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isDestructive
-              ? Colors.redAccent.withValues(alpha: 0.05)
-              : Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(14),
-          border: isDestructive
-              ? Border.all(color: Colors.redAccent.withValues(alpha: 0.1))
-              : null,
-        ),
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(
           children: [
-            Icon(icon, color: color),
-            const SizedBox(width: 12),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 18, color: iconColor),
+            ),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -296,32 +460,31 @@ class _SettingsPageState extends State<SettingsPage> {
                     title,
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: isDestructive
-                          ? Colors.redAccent
-                          : Theme.of(context).textTheme.bodyLarge?.color,
+                      fontSize: 14,
+                      color: textColor,
                     ),
                   ),
-                  const SizedBox(height: 3),
                   Text(
                     subtitle,
                     style: TextStyle(
+                      fontSize: 12,
                       color: isDestructive
                           ? Colors.redAccent.withValues(alpha: 0.7)
-                          : Theme.of(context).textTheme.bodyMedium?.color
-                                ?.withValues(alpha: 0.7),
+                          : Theme.of(context).textTheme.bodySmall?.color
+                                ?.withValues(alpha: 0.6),
                     ),
                   ),
                 ],
               ),
             ),
             Icon(
-              Icons.arrow_forward_ios,
-              size: 14,
+              Icons.arrow_forward_ios_rounded,
+              size: 13,
               color: isDestructive
                   ? Colors.redAccent.withValues(alpha: 0.5)
                   : Theme.of(
                       context,
-                    ).textTheme.bodyMedium?.color?.withValues(alpha: 0.5),
+                    ).textTheme.bodySmall?.color?.withValues(alpha: 0.3),
             ),
           ],
         ),

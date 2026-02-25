@@ -14,6 +14,11 @@ class OrderDetailModel {
   final String? supplierId;
   final String? supplierEmail;
   final String? supplierPhone;
+  final String? supplierCompany;
+  final String? supplierAddress;
+  final String? supplierDl;
+  final String? supplierDlExpiry;
+  final String? supplierGst;
 
   OrderDetailModel({
     required this.id,
@@ -31,6 +36,11 @@ class OrderDetailModel {
     this.supplierId,
     this.supplierEmail,
     this.supplierPhone,
+    this.supplierCompany,
+    this.supplierAddress,
+    this.supplierDl,
+    this.supplierDlExpiry,
+    this.supplierGst,
   });
 
   factory OrderDetailModel.fromMap(Map<String, dynamic> map) {
@@ -56,6 +66,11 @@ class OrderDetailModel {
       supplierId: supplier?['id'],
       supplierEmail: supplier?['email'],
       supplierPhone: supplier?['phone'],
+      supplierCompany: supplier?['company_name'],
+      supplierAddress: supplier?['company_address'],
+      supplierDl: supplier?['drug_license_number'],
+      supplierDlExpiry: supplier?['drug_license_expiry'],
+      supplierGst: supplier?['gst_number'],
     );
   }
 }
