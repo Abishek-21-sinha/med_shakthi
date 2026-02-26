@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
@@ -182,7 +184,9 @@ class _AccountPageState extends State<AccountPage> {
 
   Future<void> _showEditProfileSheet() async {
     final nameCtrl = TextEditingController(text: _displayName);
-    final phoneCtrl = TextEditingController(text: _phone);
+    // Store the full international phone number (with dial code)
+    String _completePhone = _phone;
+    bool _phoneValid = _phone.isNotEmpty;
 
     await showModalBottomSheet(
       context: context,
