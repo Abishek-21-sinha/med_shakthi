@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:share_plus/share_plus.dart';  // ← ADDED
 import 'package:med_shakthi/src/features/products/data/models/product_model.dart';
 import 'package:med_shakthi/src/core/utils/smart_product_image.dart';
 import 'package:med_shakthi/src/core/utils/custom_snackbar.dart';
@@ -128,6 +129,7 @@ class _SupplierProductDetailsPageState
         child: Column(
           children: [
             _TopBar(
+              product: widget.product,  // ← PASS PRODUCT
               onEdit: _navigateToEdit,
               onDelete: _deleteProduct,
               isOwner: _isOwner,
@@ -155,13 +157,14 @@ class _SupplierProductDetailsPageState
 }
 
 /* ---------------- TOP BAR ---------------- */
-
 class _TopBar extends StatelessWidget {
+  final Product product;  // ← ADDED
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final bool isOwner;
 
   const _TopBar({
+    required this.product,  // ← ADDED
     required this.onEdit,
     required this.onDelete,
     required this.isOwner,
@@ -204,7 +207,15 @@ class _TopBar extends StatelessWidget {
               onPressed: onDelete,
             ),
           ] else ...[
-            Icon(Icons.share, color: Theme.of(context).iconTheme.color),
+            // ← WORKING SHARE BUTTON (EXACT CUSTOMER LOGIC)
+            InkWell(
+              onTap: () {
+                final link = 'https://subhuu.github.io/medshakthi/product?id=${product.id}';
+                final text = '💊 Check out ${product.name} on Med Shakthi!\n₹${product.price}\n\n$link';
+                Share.share(text);
+              },
+              child: Icon(Icons.share, color: Theme.of(context).iconTheme.color),
+            ),
           ],
         ],
       ),
@@ -213,7 +224,6 @@ class _TopBar extends StatelessWidget {
 }
 
 /* ---------------- IMAGE CARD ---------------- */
-
 class _ProductImageCard extends StatelessWidget {
   final Product product;
 
@@ -240,7 +250,6 @@ class _ProductImageCard extends StatelessWidget {
 }
 
 /* ---------------- PRODUCT INFO ---------------- */
-
 class _ProductInfoSection extends StatelessWidget {
   final Product product;
 
@@ -347,7 +356,6 @@ class _ProductInfoSection extends StatelessWidget {
 }
 
 /* ---------------- BOTTOM ACTION ---------------- */
-
 class _BottomAction extends StatelessWidget {
   final VoidCallback onEdit;
 
