@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:med_shakthi/src/features/profile/presentation/screens/settings_page.dart';
@@ -190,60 +191,73 @@ class _AccountPageState extends State<AccountPage> {
 
   Future<void> _showEditProfileDialog() async {
     final nameCtrl = TextEditingController(text: _displayName);
-    final phoneCtrl = TextEditingController(text: _phone);
+    // Store the full international phone number (with dial code)
+    String _completePhone = _phone;
+    bool _phoneValid = _phone.isNotEmpty;
 
     final saved = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Edit Profile'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Name',
-                border: OutlineInputBorder(),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateDialog) => AlertDialog(
+          title: const Text('Edit Profile'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Name',
+                  border: OutlineInputBorder(),
+                ),
               ),
+              const SizedBox(height: 12),
+              IntlPhoneField(
+                initialValue: _phone.startsWith('+') ? _phone : null,
+                initialCountryCode: 'IN',
+                keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Phone',
+                  border: OutlineInputBorder(),
+                  hintText: 'Enter 10-digit number',
+                ),
+                onChanged: (phone) {
+                  setStateDialog(() {
+                    _completePhone = phone.completeNumber;
+                    _phoneValid = phone.isValidNumber();
+                  });
+                },
+                onCountryChanged: (country) {
+                  setStateDialog(() {
+                    _phoneValid = false;
+                  });
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: phoneCtrl,
-              keyboardType: TextInputType.phone,
-              maxLength: 10,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-              ],
-              decoration: const InputDecoration(
-                labelText: 'Phone',
-                border: OutlineInputBorder(),
-                counterText: '',
-                hintText: 'Enter 10-digit phone number',
-              ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Save'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
 
     if (saved == true) {
-      // Validate phone number: must be exactly 10 digits
-      final phone = phoneCtrl.text.trim();
-      if (phone.isNotEmpty && phone.length != 10) {
+      // Validate phone number
+      if (_completePhone.isNotEmpty && !_phoneValid) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Phone number must be exactly 10 digits.'),
+              content: Text('Please enter a valid phone number.'),
               backgroundColor: Colors.redAccent,
             ),
           );
@@ -258,14 +272,14 @@ class _AccountPageState extends State<AccountPage> {
             .from('users')
             .update({
               'name': nameCtrl.text.trim(),
-              'phone': phoneCtrl.text.trim(),
+              'phone': _completePhone,
             })
             .eq('id', user.id);
 
         if (mounted) {
           setState(() {
             _displayName = nameCtrl.text.trim();
-            _phone = phoneCtrl.text.trim();
+            _phone = _completePhone;
           });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
