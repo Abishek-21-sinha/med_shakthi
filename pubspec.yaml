@@ -10,6 +10,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
 
   cupertino_icons: ^1.0.8
   uuid: ^4.5.2
@@ -47,6 +49,7 @@ dependencies:
   app_links: ^6.4.1
   razorpay_flutter: ^1.4.1
   url_launcher: ^6.3.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

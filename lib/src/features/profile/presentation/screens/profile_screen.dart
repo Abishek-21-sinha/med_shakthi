@@ -14,7 +14,7 @@ import 'package:med_shakthi/src/features/checkout/presentation/screens/address_m
 import 'package:med_shakthi/src/features/checkout/presentation/screens/payment_method_screen.dart';
 import 'package:med_shakthi/src/features/cart/data/cart_data.dart';
 import '../../../orders/orders_page.dart';
-
+import 'package:intl_phone_field/intl_phone_field.dart';
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
 
@@ -25,7 +25,7 @@ class AccountPage extends StatefulWidget {
 class _AccountPageState extends State<AccountPage> {
   final SupabaseClient supabase = Supabase.instance.client;
   final _picker = ImagePicker();
-
+  final TextEditingController phoneCtrl = TextEditingController();
   File? _profileImage;
   String? _avatarUrl;
   bool _isLoading = false;

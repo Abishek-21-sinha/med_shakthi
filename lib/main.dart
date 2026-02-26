@@ -5,7 +5,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:app_links/app_links.dart';
 import 'package:med_shakthi/src/core/services/shiprocket_service.dart';
-
+import 'package:flutter_localizations/flutter_localizations.dart';
 // Providers
 import 'package:med_shakthi/src/features/cart/data/cart_data.dart';
 import 'package:med_shakthi/src/features/checkout/presentation/screens/address_store.dart';
@@ -85,11 +85,27 @@ class MyApp extends StatelessWidget {
           navigatorKey: navigatorKey,
           debugShowCheckedModeBanner: false,
           title: 'Med Shakthi',
+
+          // ✅ Locale for dd/MM/yyyy
+          locale: const Locale('en', 'GB'),
+
+          supportedLocales: const [
+            Locale('en', 'GB'),
+            Locale('en', 'US'),
+          ],
+
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: themeProvider.isDarkMode
               ? ThemeMode.dark
               : ThemeMode.light,
+
           home: const RootRouter(),
         );
       },

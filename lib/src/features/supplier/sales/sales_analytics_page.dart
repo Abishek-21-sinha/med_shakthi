@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/services.dart';
 import 'sales_stats_service.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:intl/intl.dart';
 
 class SalesAnalyticsPage extends StatefulWidget {
   const SalesAnalyticsPage({super.key});
@@ -284,7 +286,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
       crossAxisCount: 2,
       crossAxisSpacing: 16,
       mainAxisSpacing: 16,
-      childAspectRatio: 1.4,
+      mainAxisExtent: 170,
       children: [
         _buildSummaryCard(
           'Total Revenue',
@@ -323,13 +325,13 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
   }
 
   Widget _buildSummaryCard(
-    String title,
-    String value,
-    String change,
-    IconData icon,
-    Color color,
-    bool isDark,
-  ) {
+      String title,
+      String value,
+      String change,
+      IconData icon,
+      Color color,
+      bool isDark,
+      ) {
     return FadeTransition(
       opacity: _animationController,
       child: Container(
@@ -347,8 +349,9 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
+
+            /// 🔹 Top Row (Icon + Badge)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -360,50 +363,68 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                   ),
                   child: Icon(icon, color: color, size: 24),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: change.startsWith('+')
-                        ? const Color(0xFF10B981).withValues(alpha: 0.1)
-                        : const Color(0xFFEF4444).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    change,
-                    style: TextStyle(
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
                       color: change.startsWith('+')
-                          ? const Color(0xFF10B981)
-                          : const Color(0xFFEF4444),
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
+                          ? const Color(0xFF10B981).withValues(alpha: 0.1)
+                          : const Color(0xFFEF4444).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        change,
+                        style: TextStyle(
+                          color: change.startsWith('+')
+                              ? const Color(0xFF10B981)
+                              : const Color(0xFFEF4444),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ],
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black87,
+
+            const SizedBox(height: 12),
+
+            /// 🔹 Value + Title
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      value,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.white60 : Colors.black54,
+                  const SizedBox(height: 4),
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? Colors.white60 : Colors.black54,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
@@ -412,33 +433,34 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
   }
 
   Widget _buildFilterChips(bool isDark) {
+
+    final now = DateTime.now();
+
+    final dateText =
+    _selectedDateRange == 'Today'
+        ? DateFormat('dd MMM').format(now)
+        : _selectedDateRange;
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       physics: const BouncingScrollPhysics(),
       child: Row(
         children: [
           _buildFilterChip(
-            '📅 $_selectedDateRange',
+            '$dateText',
             isDark,
-            () => _showFilterBottomSheet(context),
+                () => _showFilterBottomSheet(context),
           ),
           const SizedBox(width: 8),
           _buildFilterChip(
             '🗂 Category: $_selectedCategory',
             isDark,
-            () => _showFilterBottomSheet(context),
-          ),
-          const SizedBox(width: 8),
-          _buildFilterChip(
-            '💳 Payment: $_selectedPaymentStatus',
-            isDark,
-            () => _showFilterBottomSheet(context),
+                () => _showFilterBottomSheet(context),
           ),
         ],
       ),
     );
   }
-
   Widget _buildFilterChip(String label, bool isDark, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
@@ -1221,10 +1243,10 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                   top: Radius.circular(24),
                 ),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -1353,7 +1375,8 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                   ),
                   const SizedBox(height: 8),
                 ],
-              ),
+                  ),
+                ),
             );
           },
         );
@@ -1371,18 +1394,22 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
       ),
     );
   }
-
   Future<void> _showDateRangePicker(BuildContext context) async {
     final DateTimeRange? picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2000),
       lastDate: DateTime.now(),
+
+      // ✅ Keyboard input mode enable
+      initialEntryMode: DatePickerEntryMode.input,
+      switchToInputEntryModeIcon: const Icon(Icons.keyboard),
+
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(
-              context,
-            ).colorScheme.copyWith(primary: const Color(0xFF4CA6A8)),
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: const Color(0xFF4CA6A8),
+            ),
           ),
           child: child!,
         );
@@ -1448,5 +1475,24 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
         context,
       ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
     }
+  }
+
+}
+class DateInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue,
+      TextEditingValue newValue) {
+
+    var text = newValue.text;
+
+    if (text.length == 2 || text.length == 5) {
+      text += '/';
+    }
+
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
   }
 }
