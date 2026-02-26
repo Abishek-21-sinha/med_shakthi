@@ -15,12 +15,15 @@ class InvoicePage extends StatelessWidget {
   final String buyerName;
   final String buyerPhone;
 
+  final Map<String, dynamic>? supplierInfo;
+
   const InvoicePage({
     super.key,
     required this.orderData,
     required this.items,
     this.buyerName = '',
     this.buyerPhone = '',
+    this.supplierInfo,
   });
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -47,33 +50,35 @@ class InvoicePage extends StatelessWidget {
   Future<Uint8List> _buildPdf(PdfPageFormat format) async {
     final doc = pw.Document();
 
-    // Load a font that supports the Rupee glyph (₹ = U+20B9)
     final fontRegular = await PdfGoogleFonts.notoSansRegular();
     final fontBold = await PdfGoogleFonts.notoSansBold();
     final theme = pw.ThemeData.withFont(base: fontRegular, bold: fontBold);
 
-    final accentColor = PdfColor.fromHex('#4C8077');
-    final lightAccent = PdfColor.fromHex('#EAF4F2');
-    final grey = PdfColor.fromHex('#777777');
+    final primaryColor = PdfColor.fromHex('#1E6E65'); // Deep medical teal
+    final lightBg = PdfColor.fromHex('#F4F9F8');
+    final greyText = PdfColor.fromHex('#555555');
+    final lightGrey = PdfColor.fromHex('#EEEEEE');
 
     doc.addPage(
       pw.MultiPage(
         theme: theme,
-        pageFormat: format,
-        margin: const pw.EdgeInsets.all(32),
-        header: (ctx) => _buildHeader(accentColor, lightAccent),
-        footer: (ctx) => _buildFooter(ctx, grey),
+        pageFormat: format.copyWith(
+          marginTop: 40,
+          marginBottom: 40,
+          marginLeft: 40,
+          marginRight: 40,
+        ),
+        header: (ctx) => _buildProfessionalHeader(primaryColor, greyText),
+        footer: (ctx) => _buildProfessionalFooter(ctx, greyText, primaryColor),
         build: (ctx) => [
-          pw.SizedBox(height: 16),
-          _buildMetaRow(accentColor, grey),
+          pw.SizedBox(height: 30),
+          _buildAddressesAndMeta(primaryColor, lightBg, greyText),
+          pw.SizedBox(height: 30),
+          _buildProfessionalTable(primaryColor, lightBg, lightGrey, greyText),
           pw.SizedBox(height: 20),
-          _buildAddressSection(grey, accentColor),
-          pw.SizedBox(height: 20),
-          _buildItemsTable(accentColor, lightAccent, grey),
-          pw.SizedBox(height: 16),
-          _buildTotalsSection(accentColor, lightAccent),
-          pw.SizedBox(height: 32),
-          _buildFooterNote(grey),
+          _buildProfessionalTotals(primaryColor, lightBg),
+          pw.SizedBox(height: 40),
+          _buildTermsAndConditions(greyText),
         ],
       ),
     );
@@ -81,207 +86,276 @@ class InvoicePage extends StatelessWidget {
     return doc.save();
   }
 
-  pw.Widget _buildHeader(PdfColor accent, PdfColor light) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.symmetric(horizontal: 0, vertical: 12),
-      decoration: pw.BoxDecoration(
-        color: accent,
-        borderRadius: pw.BorderRadius.circular(8),
-      ),
-      child: pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(horizontal: 20),
-        child: pw.Row(
+  pw.Widget _buildProfessionalHeader(PdfColor primaryColor, PdfColor greyText) {
+    final companyName =
+        supplierInfo != null &&
+            supplierInfo!['company'] != null &&
+            supplierInfo!['company'].toString().isNotEmpty
+        ? supplierInfo!['company'].toString().toUpperCase()
+        : 'MEDICAL SUPPLIES PROVIDER';
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
-                  'MED SHAKTHI',
+                  companyName,
                   style: pw.TextStyle(
-                    fontSize: 20,
+                    color: primaryColor,
+                    fontSize: 24,
                     fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.white,
+                    letterSpacing: 1.2,
                   ),
                 ),
+                pw.SizedBox(height: 4),
                 pw.Text(
-                  'Medical Supplies Platform',
+                  'MEDICAL TAX INVOICE',
                   style: pw.TextStyle(
+                    color: greyText,
                     fontSize: 10,
-                    color: const PdfColor(1, 1, 1, 0.7),
+                    letterSpacing: 2,
+                    fontWeight: pw.FontWeight.bold,
                   ),
                 ),
               ],
             ),
-            pw.Text(
-              'INVOICE',
-              style: pw.TextStyle(
-                fontSize: 26,
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.white,
-                letterSpacing: 2,
-              ),
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Text(
+                  'INVOICE',
+                  style: pw.TextStyle(
+                    fontSize: 32,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColor.fromHex('#DDDDDD'),
+                    letterSpacing: 2,
+                  ),
+                ),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'INV: $_orderNumber',
+                  style: pw.TextStyle(
+                    fontSize: 12,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.Text(
+                  'Date: $_invoiceDate',
+                  style: pw.TextStyle(fontSize: 10, color: greyText),
+                ),
+              ],
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  pw.Widget _buildFooter(pw.Context ctx, PdfColor grey) {
-    return pw.Container(
-      margin: const pw.EdgeInsets.only(top: 8),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        children: [
-          pw.Text(
-            'Med Shakthi — medshakthi.app',
-            style: pw.TextStyle(fontSize: 9, color: grey),
-          ),
-          pw.Text(
-            'Page ${ctx.pageNumber} of ${ctx.pagesCount}',
-            style: pw.TextStyle(fontSize: 9, color: grey),
-          ),
-        ],
-      ),
-    );
-  }
-
-  pw.Widget _buildMetaRow(PdfColor accent, PdfColor grey) {
-    return pw.Row(
-      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-      children: [
-        pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text(
-              'Invoice #',
-              style: pw.TextStyle(fontSize: 10, color: grey),
-            ),
-            pw.Text(
-              _orderNumber,
-              style: pw.TextStyle(
-                fontSize: 13,
-                fontWeight: pw.FontWeight.bold,
-                color: accent,
-              ),
-            ),
-          ],
-        ),
-        pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text(
-              'Invoice Date',
-              style: pw.TextStyle(fontSize: 10, color: grey),
-            ),
-            pw.Text(
-              _invoiceDate,
-              style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
-            ),
-          ],
-        ),
-        pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text(
-              'Payment Method',
-              style: pw.TextStyle(fontSize: 10, color: grey),
-            ),
-            pw.Text(
-              orderData['payment_method']?.toString() ?? 'Online',
-              style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
-            ),
-          ],
-        ),
-        pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text('Status', style: pw.TextStyle(fontSize: 10, color: grey)),
-            pw.Text(
-              (orderData['status'] ?? 'Pending').toString().toUpperCase(),
-              style: pw.TextStyle(
-                fontSize: 13,
-                fontWeight: pw.FontWeight.bold,
-                color: accent,
-              ),
-            ),
-          ],
-        ),
+        pw.SizedBox(height: 10),
+        pw.Divider(color: primaryColor, thickness: 2),
       ],
     );
   }
 
-  pw.Widget _buildAddressSection(PdfColor grey, PdfColor accent) {
-    final address = orderData['shipping_address'] ?? 'Not provided';
+  pw.Widget _buildAddressesAndMeta(
+    PdfColor primary,
+    PdfColor lightBg,
+    PdfColor greyText,
+  ) {
     return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
+        // BILLED BY (Supplier)
         pw.Expanded(
-          child: _buildAddressCard(
-            title: 'Bill To / Ship To',
-            lines: [
-              if (buyerName.isNotEmpty) buyerName,
-              if (buyerPhone.isNotEmpty) buyerPhone,
-              address,
+          flex: 1,
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'BILLED FROM / SUPPLIER',
+                style: pw.TextStyle(
+                  fontSize: 9,
+                  color: primary,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 6),
+              if (supplierInfo?['name'] != null &&
+                  supplierInfo!['name'].toString().isNotEmpty)
+                pw.Text(
+                  supplierInfo!['name'],
+                  style: pw.TextStyle(
+                    fontSize: 11,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              if (supplierInfo?['address'] != null &&
+                  supplierInfo!['address'].toString().isNotEmpty)
+                pw.Text(
+                  supplierInfo!['address'],
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    color: greyText,
+                    lineSpacing: 2,
+                  ),
+                ),
+              pw.SizedBox(height: 4),
+              if (supplierInfo?['phone'] != null &&
+                  supplierInfo!['phone'].toString().isNotEmpty)
+                pw.Text(
+                  'P: ${supplierInfo!['phone']}',
+                  style: pw.TextStyle(fontSize: 10, color: greyText),
+                ),
+              if (supplierInfo?['email'] != null &&
+                  supplierInfo!['email'].toString().isNotEmpty)
+                pw.Text(
+                  'E: ${supplierInfo!['email']}',
+                  style: pw.TextStyle(fontSize: 10, color: greyText),
+                ),
             ],
-            accent: accent,
-            grey: grey,
           ),
         ),
-        pw.SizedBox(width: 16),
+        pw.SizedBox(width: 20),
+        // BILLED TO (Buyer)
         pw.Expanded(
-          child: _buildAddressCard(
-            title: 'From',
-            lines: [
-              'Med Shakthi Platform',
-              'medshakthi.app',
-              'support@medshakthi.app',
+          flex: 1,
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'BILLED TO',
+                style: pw.TextStyle(
+                  fontSize: 9,
+                  color: primary,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 6),
+              pw.Text(
+                buyerName.isNotEmpty ? buyerName : 'Customer',
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              if (orderData['shipping_address'] != null)
+                pw.Text(
+                  orderData['shipping_address'],
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    color: greyText,
+                    lineSpacing: 2,
+                  ),
+                ),
+              if (buyerPhone.isNotEmpty)
+                pw.Text(
+                  'P: $buyerPhone',
+                  style: pw.TextStyle(fontSize: 10, color: greyText),
+                ),
             ],
-            accent: accent,
-            grey: grey,
+          ),
+        ),
+        pw.SizedBox(width: 20),
+        // MEDICAL & TAX INFO
+        pw.Expanded(
+          flex: 1,
+          child: pw.Container(
+            padding: const pw.EdgeInsets.all(10),
+            decoration: pw.BoxDecoration(
+              color: lightBg,
+              borderRadius: pw.BorderRadius.circular(6),
+              border: pw.Border.all(color: PdfColor.fromHex('#E0E0E0')),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  'REGISTRATION DETAILS',
+                  style: pw.TextStyle(
+                    fontSize: 9,
+                    color: primary,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 6),
+                _buildRegRow('GSTIN:', supplierInfo?['gst']?.toString()),
+                _buildRegRow('D.L. No:', supplierInfo?['dl']?.toString()),
+                if (supplierInfo?['dlExpiry'] != null &&
+                    supplierInfo!['dlExpiry'].toString().isNotEmpty)
+                  _buildRegRow(
+                    'D.L. Exp:',
+                    DateFormat('dd MMM yyyy').format(
+                      DateTime.tryParse(supplierInfo!['dlExpiry'].toString()) ??
+                          DateTime.now(),
+                    ),
+                  ),
+                pw.SizedBox(height: 4),
+                pw.Divider(color: PdfColor.fromHex('#CCCCCC'), thickness: 0.5),
+                pw.SizedBox(height: 4),
+                _buildRegRow(
+                  'Payment:',
+                  orderData['payment_method']?.toString() ?? 'Online',
+                ),
+                _buildRegRow(
+                  'Status:',
+                  (orderData['status'] ?? 'Pending').toString().toUpperCase(),
+                  boldValue: true,
+                ),
+              ],
+            ),
           ),
         ),
       ],
     );
   }
 
-  pw.Widget _buildAddressCard({
-    required String title,
-    required List<String> lines,
-    required PdfColor accent,
-    required PdfColor grey,
+  pw.Widget _buildRegRow(
+    String label,
+    String? value, {
+    bool boldValue = false,
   }) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(12),
-      decoration: pw.BoxDecoration(
-        color: PdfColor.fromHex('#F8F8F8'),
-        borderRadius: pw.BorderRadius.circular(6),
-        border: pw.Border.all(color: PdfColor.fromHex('#E0E0E0')),
-      ),
-      child: pw.Column(
+    if (value == null || value.isEmpty) return pw.SizedBox();
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: 3),
+      child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Text(
-            title.toUpperCase(),
-            style: pw.TextStyle(
-              fontSize: 9,
-              fontWeight: pw.FontWeight.bold,
-              color: accent,
-              letterSpacing: 0.5,
+          pw.SizedBox(
+            width: 45,
+            child: pw.Text(
+              label,
+              style: pw.TextStyle(
+                fontSize: 9,
+                color: PdfColor.fromHex('#777777'),
+              ),
             ),
           ),
-          pw.SizedBox(height: 6),
-          ...lines.map(
-            (l) => pw.Text(l, style: pw.TextStyle(fontSize: 11, color: grey)),
+          pw.Expanded(
+            child: pw.Text(
+              value,
+              style: pw.TextStyle(
+                fontSize: 9,
+                fontWeight: boldValue
+                    ? pw.FontWeight.bold
+                    : pw.FontWeight.normal,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  pw.Widget _buildItemsTable(PdfColor accent, PdfColor light, PdfColor grey) {
-    final headers = ['#', 'Item / Description', 'Qty', 'Unit Price', 'Total'];
+  pw.Widget _buildProfessionalTable(
+    PdfColor primary,
+    PdfColor lightBg,
+    PdfColor lightGrey,
+    PdfColor greyText,
+  ) {
+    final headers = ['#', 'DESCRIPTION', 'QTY', 'PRICE', 'AMOUNT'];
 
     final rows = items.asMap().entries.map((entry) {
       final i = entry.key;
@@ -289,122 +363,188 @@ class InvoicePage extends StatelessWidget {
       final qty = (item['quantity'] as num? ?? 0).toInt();
       final price = (item['price'] as num? ?? 0).toDouble();
       final total = qty * price;
+
+      final itemName = item['item_name'] ?? 'Unknown Item';
+      final details = [
+        if (item['brand'] != null && item['brand'].toString().isNotEmpty)
+          item['brand'],
+        if (item['unit_size'] != null &&
+            item['unit_size'].toString().isNotEmpty)
+          item['unit_size'],
+      ].join(' • ');
+
       return [
         '${i + 1}',
-        '${item['item_name'] ?? 'Unknown'}\n${item['brand'] != null && item['brand'].toString().isNotEmpty ? item['brand'] : ''}${item['unit_size'] != null ? '  •  ${item['unit_size']}' : ''}',
+        '$itemName${details.isNotEmpty ? '\n$details' : ''}',
         '$qty',
-        '₹${price.toStringAsFixed(2)}',
-        '₹${total.toStringAsFixed(2)}',
+        '₹ ${price.toStringAsFixed(2)}',
+        '₹ ${total.toStringAsFixed(2)}',
       ];
     }).toList();
 
     return pw.TableHelper.fromTextArray(
       headers: headers,
       data: rows,
-      headerStyle: pw.TextStyle(
-        fontWeight: pw.FontWeight.bold,
-        color: PdfColors.white,
-        fontSize: 10,
+      border: pw.TableBorder(
+        horizontalInside: pw.BorderSide(color: lightGrey, width: 0.5),
+        bottom: pw.BorderSide(color: primary, width: 1),
       ),
-      headerDecoration: pw.BoxDecoration(color: accent),
-      headerHeight: 28,
-      cellHeight: 36,
+      headerStyle: pw.TextStyle(
+        color: primary,
+        fontSize: 10,
+        fontWeight: pw.FontWeight.bold,
+      ),
+      headerDecoration: pw.BoxDecoration(
+        color: lightBg,
+        border: pw.Border(
+          top: pw.BorderSide(color: primary, width: 1),
+          bottom: pw.BorderSide(color: primary, width: 1),
+        ),
+      ),
+      cellHeight: 32,
       cellAlignments: {
-        0: pw.Alignment.center,
+        0: pw.Alignment.centerLeft,
         1: pw.Alignment.centerLeft,
         2: pw.Alignment.center,
         3: pw.Alignment.centerRight,
         4: pw.Alignment.centerRight,
       },
-      cellStyle: pw.TextStyle(fontSize: 10),
-      oddRowDecoration: pw.BoxDecoration(color: light),
-      border: pw.TableBorder.all(
-        color: PdfColor.fromHex('#E0E0E0'),
-        width: 0.5,
-      ),
+      cellStyle: pw.TextStyle(fontSize: 10, color: PdfColor.fromHex('#333333')),
       columnWidths: {
-        0: const pw.FixedColumnWidth(24),
+        0: const pw.FixedColumnWidth(30),
         1: const pw.FlexColumnWidth(3),
-        2: const pw.FixedColumnWidth(36),
-        3: const pw.FixedColumnWidth(72),
-        4: const pw.FixedColumnWidth(72),
+        2: const pw.FixedColumnWidth(50),
+        3: const pw.FixedColumnWidth(80),
+        4: const pw.FixedColumnWidth(80),
       },
     );
   }
 
-  pw.Widget _buildTotalsSection(PdfColor accent, PdfColor light) {
+  pw.Widget _buildProfessionalTotals(PdfColor primary, PdfColor lightBg) {
     final subtotal = _subtotal;
     final shippingFee = (orderData['shipping'] as num?)?.toDouble() ?? 0.0;
     final total = (orderData['total_amount'] as num?)?.toDouble() ?? subtotal;
 
-    return pw.Align(
-      alignment: pw.Alignment.centerRight,
-      child: pw.Container(
-        width: 260,
-        decoration: pw.BoxDecoration(
-          color: light,
-          borderRadius: pw.BorderRadius.circular(6),
-          border: pw.Border.all(color: accent, width: 0.5),
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Expanded(
+          flex: 3,
+          child: pw.Container(), // Empty space on left
         ),
-        padding: const pw.EdgeInsets.all(14),
-        child: pw.Column(
-          children: [
-            _totalRow('Items Subtotal', '₹${subtotal.toStringAsFixed(2)}'),
-            pw.SizedBox(height: 4),
-            _totalRow(
-              'Shipping & Handling',
-              shippingFee > 0 ? '₹${shippingFee.toStringAsFixed(2)}' : 'Free',
-            ),
-            pw.Divider(color: accent, thickness: 0.5),
-            _totalRow(
-              'Grand Total',
-              '₹${total.toStringAsFixed(2)}',
-              bold: true,
-              color: accent,
-            ),
-          ],
+        pw.Expanded(
+          flex: 2,
+          child: pw.Column(
+            children: [
+              _buildTotalRow('Subtotal', '₹ ${subtotal.toStringAsFixed(2)}'),
+              _buildTotalRow(
+                'Shipping',
+                shippingFee > 0
+                    ? '₹ ${shippingFee.toStringAsFixed(2)}'
+                    : 'Free',
+              ),
+              pw.SizedBox(height: 6),
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(
+                  vertical: 8,
+                  horizontal: 12,
+                ),
+                decoration: pw.BoxDecoration(
+                  color: lightBg,
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: _buildTotalRow(
+                  'TOTAL',
+                  '₹ ${total.toStringAsFixed(2)}',
+                  isTotal: true,
+                  primary: primary,
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
-  pw.Widget _totalRow(
+  pw.Widget _buildTotalRow(
     String label,
     String value, {
-    bool bold = false,
-    PdfColor? color,
+    bool isTotal = false,
+    PdfColor? primary,
   }) {
-    final style = pw.TextStyle(
-      fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
-      fontSize: bold ? 13 : 11,
-      color: color,
-    );
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 4),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Text(label, style: style),
-          pw.Text(value, style: style),
+          pw.Text(
+            label,
+            style: pw.TextStyle(
+              fontSize: isTotal ? 12 : 10,
+              fontWeight: isTotal ? pw.FontWeight.bold : pw.FontWeight.normal,
+              color: isTotal ? primary : PdfColor.fromHex('#555555'),
+            ),
+          ),
+          pw.Text(
+            value,
+            style: pw.TextStyle(
+              fontSize: isTotal ? 14 : 10,
+              fontWeight: isTotal ? pw.FontWeight.bold : pw.FontWeight.normal,
+              color: isTotal ? primary : PdfColor.fromHex('#333333'),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  pw.Widget _buildFooterNote(PdfColor grey) {
-    return pw.Container(
-      width: double.infinity,
-      padding: const pw.EdgeInsets.all(12),
-      decoration: pw.BoxDecoration(
-        color: PdfColor.fromHex('#F8F8F8'),
-        borderRadius: pw.BorderRadius.circular(6),
-      ),
-      child: pw.Text(
-        'This is a computer-generated invoice. No signature required.\n'
-        'For queries, contact us at support@medshakthi.app.',
-        style: pw.TextStyle(fontSize: 9, color: grey),
-        textAlign: pw.TextAlign.center,
-      ),
+  pw.Widget _buildTermsAndConditions(PdfColor greyText) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'TERMS & CONDITIONS',
+          style: pw.TextStyle(
+            fontSize: 9,
+            fontWeight: pw.FontWeight.bold,
+            color: greyText,
+          ),
+        ),
+        pw.SizedBox(height: 4),
+        pw.Text(
+          '1. All disputes are subject to the jurisdiction of the supplier\'s registered address.\n'
+          '2. Medicines once sold cannot be returned unless expired or damaged upon receipt.\n'
+          '3. This is a computer-generated invoice and does not require a physical signature.',
+          style: pw.TextStyle(fontSize: 8, color: greyText, lineSpacing: 1.5),
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildProfessionalFooter(
+    pw.Context ctx,
+    PdfColor greyText,
+    PdfColor primary,
+  ) {
+    return pw.Column(
+      children: [
+        pw.Divider(color: PdfColor.fromHex('#EEEEEE'), thickness: 1),
+        pw.SizedBox(height: 6),
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text(
+              'Generated via Med Shakthi — Pharmaceutical Supply Chain Platform',
+              style: pw.TextStyle(fontSize: 8, color: greyText),
+            ),
+            pw.Text(
+              'Page ${ctx.pageNumber} of ${ctx.pagesCount}',
+              style: pw.TextStyle(fontSize: 8, color: greyText),
+            ),
+          ],
+        ),
+      ],
     );
   }
 

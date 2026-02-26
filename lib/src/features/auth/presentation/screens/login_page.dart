@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:med_shakthi/src/core/widgets/app_logo.dart';
+import 'package:med_shakthi/src/core/utils/custom_snackbar.dart';
 import 'package:med_shakthi/src/features/auth/presentation/screens/role_selection_page.dart';
 
 import 'forgot_password_page.dart';
@@ -23,11 +25,57 @@ class _LoginPageState extends State<LoginPage> {
 
   bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _resendLoading = false;
+  int _resendCooldown = 0;
+  Timer? _cooldownTimer;
+
+  void _startResendCooldown() {
+    setState(() => _resendCooldown = 60);
+    _cooldownTimer?.cancel();
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      setState(() {
+        _resendCooldown--;
+        if (_resendCooldown <= 0) t.cancel();
+      });
+    });
+  }
+
+  Future<void> _onResendEmailPressed() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      showCustomSnackBar(
+        context,
+        'Enter your valid email address above first.',
+        isError: true,
+      );
+      return;
+    }
+    setState(() => _resendLoading = true);
+    try {
+      await supabase.auth.resend(type: OtpType.signup, email: email);
+      if (!mounted) return;
+      showCustomSnackBar(
+        context,
+        'If this email is registered, a verification link has been sent.',
+      );
+      _startResendCooldown();
+    } catch (e) {
+      if (!mounted) return;
+      showCustomSnackBar(context, 'Could not resend: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _resendLoading = false);
+    }
+  }
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _cooldownTimer?.cancel();
     super.dispose();
   }
 
@@ -53,23 +101,22 @@ class _LoginPageState extends State<LoginPage> {
 
         if (!mounted) return;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Login successful'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        showCustomSnackBar(context, 'Login successful');
       }
     } on AuthException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message), backgroundColor: Colors.redAccent),
-      );
+      if (e.message.toLowerCase().contains('email not confirmed')) {
+        showCustomSnackBar(
+          context,
+          'Please verify your email address to log in.',
+          isError: true,
+        );
+      } else {
+        showCustomSnackBar(context, e.message, isError: true);
+      }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
-      );
+      showCustomSnackBar(context, 'Error: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -232,6 +279,67 @@ class _LoginPageState extends State<LoginPage> {
                           ],
                         ),
                       ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // ── Resend verification email ──────────────────────────
+                  Center(
+                    child: Column(
+                      children: [
+                        Text(
+                          'Didn\'t receive a verification email?',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Theme.of(context).textTheme.bodySmall?.color
+                                ?.withValues(alpha: 0.6),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        SizedBox(
+                          height: 40,
+                          child: _resendCooldown > 0
+                              ? Text(
+                                  'Resend available in ${_resendCooldown}s',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFF6AA39B),
+                                  ),
+                                )
+                              : OutlinedButton.icon(
+                                  onPressed: _resendLoading
+                                      ? null
+                                      : _onResendEmailPressed,
+                                  icon: _resendLoading
+                                      ? const SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Color(0xFF6AA39B),
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Icons.mark_email_unread_outlined,
+                                          size: 16,
+                                        ),
+                                  label: const Text(
+                                    'Resend Verification Email',
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF6AA39B),
+                                    side: const BorderSide(
+                                      color: Color(0xFF6AA39B),
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    textStyle: const TextStyle(fontSize: 13),
+                                  ),
+                                ),
+                        ),
+                      ],
                     ),
                   ),
 

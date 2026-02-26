@@ -49,7 +49,7 @@ class _OrdersPageState extends State<OrdersPage> {
       // ✅ Fetch user orders with Supplier details (latest first)
       final res = await supabase
           .from('orders')
-          .select('*, suppliers(company_name)')
+          .select('*, suppliers(company_name), users:user_id(name, phone)')
           .eq('user_id', user.id)
           .order('created_at', ascending: false);
 

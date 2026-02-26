@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:app_links/app_links.dart';
+import 'package:med_shakthi/src/core/services/shiprocket_service.dart';
 
 // Providers
 import 'package:med_shakthi/src/features/cart/data/cart_data.dart';
@@ -19,6 +20,9 @@ import 'package:med_shakthi/src/features/dashboard/supplier_dashboard.dart';
 
 // 🔐 Reset Password Page
 import 'package:med_shakthi/src/features/auth/presentation/screens/reset_password_page.dart';
+// Product Page
+import 'package:med_shakthi/src/features/products/data/models/product_model.dart';
+import 'package:med_shakthi/src/features/products/presentation/screens/product_page.dart';
 
 /// 🔑 GLOBAL NAVIGATOR KEY (IMPORTANT)
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -28,6 +32,9 @@ Future<void> main() async {
 
   try {
     await dotenv.load(fileName: ".env");
+
+    // 🧪 Enable mock mode for delivery tracking (remove when real Shiprocket account added)
+    ShiprocketService.mockMode = true;
 
     final supabaseUrl = dotenv.env['SUPABASE_URL'];
     final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
@@ -105,9 +112,47 @@ class _RootRouterState extends State<RootRouter> {
   Session? _session;
   bool _isRecoveringPassword = false;
 
+  Future<void> _initDeepLinks() async {
+    final appLinks = AppLinks();
+    // Handle link when app was cold-started from a link
+    final initialUri = await appLinks.getInitialLink();
+    if (initialUri != null) {
+      _handleDeepLink(initialUri);
+    }
+    // Handle links while app is running
+    appLinks.uriLinkStream.listen(_handleDeepLink);
+  }
+
+  Future<void> _handleDeepLink(Uri uri) async {
+    // medshakthi://product/{productId}
+    if (uri.scheme == 'medshakthi' && uri.host == 'product') {
+      final productId = uri.pathSegments.isNotEmpty
+          ? uri.pathSegments.first
+          : null;
+      if (productId == null || productId.isEmpty) return;
+      try {
+        final res = await Supabase.instance.client
+            .from('products')
+            .select('*, suppliers(name, supplier_code, id)')
+            .eq('id', productId)
+            .maybeSingle();
+        if (res == null) return;
+        final product = Product.fromMap(res);
+        if (mounted) {
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(builder: (_) => ProductPage(product: product)),
+          );
+        }
+      } catch (e) {
+        debugPrint('Deep link navigation error: $e');
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _initDeepLinks();
 
     try {
       _session = Supabase.instance.client.auth.currentSession;
@@ -147,95 +192,6 @@ class _RootRouterState extends State<RootRouter> {
     } catch (e) {
       debugPrint('RootRouter initState error: $e');
     }
-  }
-
-  Future<bool> _showExitDialog(BuildContext context) async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-            surfaceTintColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            title: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6AA39B).withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.logout_rounded,
-                    color: Color(0xFF6AA39B),
-                    size: 32,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Confirm Exit',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? Colors.white
-                        : Colors.black87,
-                  ),
-                ),
-              ],
-            ),
-            content: Text(
-              'Are you sure you want to leave?\nWe\'ll be waiting for your return.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white70
-                    : Colors.black54,
-              ),
-            ),
-            actionsAlignment: MainAxisAlignment.center,
-            actions: [
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        side: const BorderSide(color: Color(0xFF6AA39B)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Stay',
-                        style: TextStyle(color: Color(0xFF6AA39B)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(context).pop(true),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        backgroundColor: const Color(0xFF6AA39B),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text('Exit'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-          ),
-        ) ??
-        false;
   }
 
   @override
@@ -281,17 +237,7 @@ class _RootRouterState extends State<RootRouter> {
       );
     }
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
-        final shouldExit = await _showExitDialog(context);
-        if (shouldExit && mounted) {
-          SystemNavigator.pop();
-        }
-      },
-      child: child,
-    );
+    return child;
   }
 }
 
@@ -335,7 +281,7 @@ class _AuthGateState extends State<AuthGate> {
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) return;
 
-      // Check if they are a supplier
+      // Check if this user is a supplier
       final supplierData = await Supabase.instance.client
           .from('suppliers')
           .select('id')
@@ -343,16 +289,22 @@ class _AuthGateState extends State<AuthGate> {
           .maybeSingle();
 
       if (supplierData != null) {
+        // ── Supplier: save to suppliers table ──
         await Supabase.instance.client
             .from('suppliers')
             .update({'onesignal_player_id': playerId})
             .eq('user_id', user.id);
-        debugPrint(
-          "Successfully updated OneSignal Player ID for supplier: $playerId",
-        );
+        debugPrint('✅ OneSignal Player ID saved for supplier: $playerId');
+      } else {
+        // ── Regular user: save to users table ──
+        await Supabase.instance.client
+            .from('users')
+            .update({'onesignal_player_id': playerId})
+            .eq('id', user.id);
+        debugPrint('✅ OneSignal Player ID saved for user: $playerId');
       }
     } catch (e) {
-      debugPrint("Failed to update OneSignal Player ID: $e");
+      debugPrint('❌ Failed to update OneSignal Player ID: $e');
     }
   }
 
@@ -368,6 +320,15 @@ class _AuthGateState extends State<AuthGate> {
 
       if (user == null) {
         if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
+      // 🔐 SECURITY: Block unverified emails from accessing the app.
+      // emailConfirmedAt is null if the user has not clicked the verification link.
+      if (user.emailConfirmedAt == null) {
+        debugPrint('⚠️ Email not confirmed for ${user.email}. Signing out.');
+        await Supabase.instance.client.auth.signOut();
+        // Auth listener in RootRouter will reset _session → LoginPage shown automatically.
         return;
       }
 

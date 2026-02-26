@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:med_shakthi/src/core/utils/custom_snackbar.dart';
 import 'order_success_screen.dart';
 import 'package:med_shakthi/src/features/checkout/presentation/screens/payment_method_store.dart';
@@ -28,6 +30,8 @@ class PaymentMethodScreen extends StatefulWidget {
 class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
   final supabase = Supabase.instance.client;
   bool _placingOrder = false;
+  late Razorpay _razorpay;
+  String? _razorpayPaymentId; // Filled on successful Razorpay payment
 
   @override
   void initState() {
@@ -35,6 +39,16 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
     Future.microtask(() {
       if (mounted) context.read<PaymentMethodStore>().fetchPaymentMethods();
     });
+    _razorpay = Razorpay();
+    _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
+    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
+    _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+  }
+
+  @override
+  void dispose() {
+    _razorpay.clear();
+    super.dispose();
   }
 
   void _showAddMethodSheet() {
@@ -46,7 +60,61 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
     );
   }
 
-  Future<void> _placeOrder() async {
+  // ── Razorpay Handlers ─────────────────────────────────────────────
+  void _handlePaymentSuccess(PaymentSuccessResponse response) {
+    debugPrint('✅ Razorpay Payment Success: ${response.paymentId}');
+    _razorpayPaymentId = response.paymentId;
+    _placeOrder(paymentMode: 'razorpay_online', paymentStatus: 'paid');
+  }
+
+  void _handlePaymentError(PaymentFailureResponse response) {
+    debugPrint('❌ Razorpay Error: ${response.message}');
+    if (mounted) {
+      showCustomSnackBar(
+        context,
+        'Payment failed: ${response.message ?? "Unknown error"}',
+        isError: true,
+      );
+    }
+  }
+
+  void _handleExternalWallet(ExternalWalletResponse response) {
+    debugPrint('💳 External wallet: ${response.walletName}');
+  }
+
+  void _startRazorpayPayment() {
+    final cart = context.read<CartData>();
+    final user = supabase.auth.currentUser;
+    if (user == null || cart.items.isEmpty) return;
+
+    const shipping = 10;
+    final total = cart.subTotal + shipping;
+    final amountPaise = (total * 100).round(); // Razorpay uses paise
+
+    // Use test key from .env, fallback to test key
+    final razorpayKey = dotenv.env['RAZORPAY_KEY_ID'] ?? 'rzp_test_placeholder';
+
+    final options = {
+      'key': razorpayKey,
+      'amount': amountPaise,
+      'name': 'Med Shakthi',
+      'description': 'Order Payment',
+      'prefill': {'contact': '', 'email': user.email ?? ''},
+      'theme': {'color': '#00B894'},
+    };
+
+    try {
+      _razorpay.open(options);
+    } catch (e) {
+      debugPrint('Razorpay open error: $e');
+      showCustomSnackBar(context, 'Could not open payment: $e', isError: true);
+    }
+  }
+
+  Future<void> _placeOrder({
+    String paymentMode = 'cod',
+    String paymentStatus = 'pending',
+  }) async {
     final cart = context.read<CartData>();
     final user = supabase.auth.currentUser;
     final paymentStore = context.read<PaymentMethodStore>();
@@ -173,7 +241,9 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
               "shipping": shipping,
               "shipping_address": deliveryAddressText,
               "status": "pending",
-              "payment_status": "pending",
+              "payment_status": paymentStatus,
+              "payment_method": paymentMode,
+              "razorpay_payment_id": _razorpayPaymentId,
               "payment_method_id": paymentStore.selectedMethodId,
             })
             .select()
@@ -196,6 +266,31 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
 
         //  Insert order details
         await supabase.from('order_details').insert(orderDetailRows);
+
+        // Deduct stock levels for purchased items
+        for (var item in items) {
+          try {
+            // Fetch current stock, subtract quantity, then update.
+            // A Supabase RPC would be more race-condition resistant, but this works.
+            final pRes = await supabase
+                .from('products')
+                .select('stock_quantity')
+                .eq('id', item.id)
+                .maybeSingle();
+
+            if (pRes != null) {
+              final currentStock = pRes['stock_quantity'] as int? ?? 0;
+              final newStock = currentStock - item.quantity;
+              await supabase
+                  .from('products')
+                  .update({'stock_quantity': newStock < 0 ? 0 : newStock})
+                  .eq('id', item.id);
+            }
+          } catch (e) {
+            debugPrint("Failed to deduct stock for product ${item.id}: $e");
+          }
+        }
+
         // print("Calling Edge Function for supplier: $supplierId");
 
         // CALL EDGE FUNCTION HERE (AFTER INSERT)
@@ -529,24 +624,64 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen> {
                 ),
 
                 const SizedBox(height: 30),
+                // ── PAY ONLINE (Razorpay) ──
                 SizedBox(
                   width: double.infinity,
                   height: 55,
-                  child: ElevatedButton(
-                    onPressed: _placingOrder ? null : _placeOrder,
+                  child: ElevatedButton.icon(
+                    onPressed: _placingOrder ? null : _startRazorpayPayment,
+                    icon: const Icon(Icons.payment_rounded),
+                    label: const Text(
+                      'PAY ONLINE',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.teal,
+                      backgroundColor: const Color(0xFF00B894),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
                       ),
                     ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // ── PLACE ORDER (COD) ──
+                SizedBox(
+                  width: double.infinity,
+                  height: 55,
+                  child: OutlinedButton(
+                    onPressed: _placingOrder
+                        ? null
+                        : () => _placeOrder(
+                            paymentMode: 'cod',
+                            paymentStatus: 'pending',
+                          ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(
+                        color: Color(0xFF00B894),
+                        width: 1.5,
+                      ),
+                      foregroundColor: const Color(0xFF00B894),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
                     child: _placingOrder
-                        ? const CircularProgressIndicator(color: Colors.white)
+                        ? const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFF00B894),
+                            ),
+                          )
                         : const Text(
-                            "PLACE ORDER",
+                            'CASH ON DELIVERY',
                             style: TextStyle(
-                              fontSize: 18,
+                              fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
                           ),

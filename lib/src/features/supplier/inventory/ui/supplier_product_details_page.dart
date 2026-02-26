@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:share_plus/share_plus.dart';  // ← ADDED
 import 'package:med_shakthi/src/features/products/data/models/product_model.dart';
 import 'package:med_shakthi/src/core/utils/smart_product_image.dart';
+import 'package:med_shakthi/src/core/utils/custom_snackbar.dart';
 import 'add_product_page.dart';
 
 class SupplierProductDetailsPage extends StatefulWidget {
@@ -69,16 +71,33 @@ class _SupplierProductDetailsPageState
     try {
       await supabase.from('products').delete().eq('id', widget.product.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Product deleted successfully")),
-        );
+        showCustomSnackBar(context, "Product deleted successfully");
         Navigator.pop(context, true); // Return true to indicate deletion
+      }
+    } on PostgrestException catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        if (e.code == '23503') {
+          showCustomSnackBar(
+            context,
+            "Cannot delete product: It is already part of an existing order.",
+            isError: true,
+          );
+        } else {
+          showCustomSnackBar(
+            context,
+            "Database error: ${e.message}",
+            isError: true,
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
+        showCustomSnackBar(
           context,
-        ).showSnackBar(SnackBar(content: Text("Error deleting product: $e")));
+          "Error deleting product: $e",
+          isError: true,
+        );
         setState(() => _isLoading = false);
       }
     }
@@ -110,6 +129,7 @@ class _SupplierProductDetailsPageState
         child: Column(
           children: [
             _TopBar(
+              product: widget.product,  // ← PASS PRODUCT
               onEdit: _navigateToEdit,
               onDelete: _deleteProduct,
               isOwner: _isOwner,
@@ -137,13 +157,14 @@ class _SupplierProductDetailsPageState
 }
 
 /* ---------------- TOP BAR ---------------- */
-
 class _TopBar extends StatelessWidget {
+  final Product product;  // ← ADDED
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final bool isOwner;
 
   const _TopBar({
+    required this.product,  // ← ADDED
     required this.onEdit,
     required this.onDelete,
     required this.isOwner,
@@ -186,7 +207,15 @@ class _TopBar extends StatelessWidget {
               onPressed: onDelete,
             ),
           ] else ...[
-            Icon(Icons.share, color: Theme.of(context).iconTheme.color),
+            // ← WORKING SHARE BUTTON (EXACT CUSTOMER LOGIC)
+            InkWell(
+              onTap: () {
+                final link = 'https://subhuu.github.io/medshakthi/product?id=${product.id}';
+                final text = '💊 Check out ${product.name} on Med Shakthi!\n₹${product.price}\n\n$link';
+                Share.share(text);
+              },
+              child: Icon(Icons.share, color: Theme.of(context).iconTheme.color),
+            ),
           ],
         ],
       ),
@@ -195,7 +224,6 @@ class _TopBar extends StatelessWidget {
 }
 
 /* ---------------- IMAGE CARD ---------------- */
-
 class _ProductImageCard extends StatelessWidget {
   final Product product;
 
@@ -222,7 +250,6 @@ class _ProductImageCard extends StatelessWidget {
 }
 
 /* ---------------- PRODUCT INFO ---------------- */
-
 class _ProductInfoSection extends StatelessWidget {
   final Product product;
 
@@ -259,6 +286,59 @@ class _ProductInfoSection extends StatelessWidget {
             "₹${product.price}",
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              if (!product.isActive)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    "HIDDEN",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ),
+              if (product.stockQuantity <= 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    "OUT OF STOCK",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  "Stock Available: ${product.stockQuantity}",
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.green,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(height: 24),
           const Text(
             "Product Description",
@@ -276,7 +356,6 @@ class _ProductInfoSection extends StatelessWidget {
 }
 
 /* ---------------- BOTTOM ACTION ---------------- */
-
 class _BottomAction extends StatelessWidget {
   final VoidCallback onEdit;
 
