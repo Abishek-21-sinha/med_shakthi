@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:med_shakthi/src/features/profile/presentation/screens/settings_page.dart';
@@ -209,9 +210,15 @@ class _AccountPageState extends State<AccountPage> {
             TextField(
               controller: phoneCtrl,
               keyboardType: TextInputType.phone,
+              maxLength: 10,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+              ],
               decoration: const InputDecoration(
                 labelText: 'Phone',
                 border: OutlineInputBorder(),
+                counterText: '',
+                hintText: 'Enter 10-digit phone number',
               ),
             ),
           ],
@@ -230,6 +237,20 @@ class _AccountPageState extends State<AccountPage> {
     );
 
     if (saved == true) {
+      // Validate phone number: must be exactly 10 digits
+      final phone = phoneCtrl.text.trim();
+      if (phone.isNotEmpty && phone.length != 10) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Phone number must be exactly 10 digits.'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+        return;
+      }
+
       final user = supabase.auth.currentUser;
       if (user == null) return;
       try {
