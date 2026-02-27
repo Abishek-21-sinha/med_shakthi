@@ -231,7 +231,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
             child: GestureDetector(
               onTap: () async {
                 if (range == 'Custom') {
-                  await _showDateRangePicker(context);
+                  await _showCustomDateRange(context);
                 } else {
                   setState(() => _selectedDateRange = range);
                   _applyFiltersAndRefetch();
@@ -1285,7 +1285,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
                         onSelected: (selected) {
                           if (range == 'Custom') {
                             Navigator.pop(context);
-                            _showDateRangePicker(context);
+                            _showCustomDateRange(context);
                           } else {
                             setModalState(() => _selectedDateRange = range);
                             setState(() => _selectedDateRange = range);
@@ -1394,40 +1394,175 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage>
       ),
     );
   }
-  Future<void> _showDateRangePicker(BuildContext context) async {
-    final DateTimeRange? picked = await showDateRangePicker(
+  Future<void> _showCustomDateRange(BuildContext context) async {
+    final startController = TextEditingController();
+    final endController = TextEditingController();
+
+    String? startError;
+    String? endError;
+
+    showModalBottomSheet(
       context: context,
-      firstDate: DateTime(2000),
-      lastDate: DateTime.now(),
+      isScrollControlled: true,
+      builder: (_) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            bool isValidDate(String input) {
+              try {
+                final parts = input.split('/');
+                if (parts.length != 3) return false;
 
-      // ✅ Keyboard input mode enable
-      initialEntryMode: DatePickerEntryMode.input,
-      switchToInputEntryModeIcon: const Icon(Icons.keyboard),
+                int day = int.parse(parts[0]);
+                int month = int.parse(parts[1]);
+                int year = int.parse(parts[2]);
 
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: const Color(0xFF4CA6A8),
-            ),
-          ),
-          child: child!,
+                if (year < 1900 || year > 2100) return false;
+                if (month < 1 || month > 12) return false;
+                if (day < 1 || day > 31) return false;
+
+                final date = DateTime(year, month, day);
+
+                return date.day == day &&
+                    date.month == month &&
+                    date.year == year;
+              } catch (e) {
+                return false;
+              }
+            }
+
+            DateTime parseDate(String input) {
+              final parts = input.split('/');
+              return DateTime(
+                int.parse(parts[2]),
+                int.parse(parts[1]),
+                int.parse(parts[0]),
+              );
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+
+                    const Text(
+                      "Select Date Range",
+                      style:
+                      TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    /// START DATE
+                    TextField(
+                      controller: startController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: "Start Date (DD/MM/YYYY)",
+                        errorText: startError,
+                      ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        DateInputFormatter(),
+                      ],
+                    ),
+
+                    const SizedBox(height: 15),
+
+                    /// END DATE
+                    TextField(
+                      controller: endController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: "End Date (DD/MM/YYYY)",
+                        errorText: endError,
+                      ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        DateInputFormatter(),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    ElevatedButton(
+                      onPressed: () {
+                        final start = startController.text;
+                        final end = endController.text;
+
+                        setModalState(() {
+                          startError = null;
+                          endError = null;
+                        });
+
+                        /// Empty check
+                        if (start.isEmpty || end.isEmpty) {
+                          setModalState(() {
+                            if (start.isEmpty) {
+                              startError = "Start date required";
+                            }
+                            if (end.isEmpty) {
+                              endError = "End date required";
+                            }
+                          });
+                          return;
+                        }
+
+                        /// Format validation
+                        if (!isValidDate(start)) {
+                          setModalState(() {
+                            startError = "Invalid date";
+                          });
+                          return;
+                        }
+
+                        if (!isValidDate(end)) {
+                          setModalState(() {
+                            endError = "Invalid date";
+                          });
+                          return;
+                        }
+
+                        /// Compare dates
+                        DateTime startDate = parseDate(start);
+                        DateTime endDate = parseDate(end);
+
+                        if (startDate.isAfter(endDate)) {
+                          setModalState(() {
+                            endError =
+                            "End date must be after start date";
+                          });
+                          return;
+                        }
+
+                        /// SUCCESS
+                        Navigator.pop(context);
+
+                        setState(() {
+                          _selectedDateRange = 'Custom';
+                          _salesStatsFuture =
+                              SalesStatsService().fetchSalesStats(
+                                dateRange: 'Custom',
+                                customStartDate: startDate,
+                                customEndDate: endDate,
+                              );
+                        });
+                      },
+                      child: const Text("Apply"),
+                    )
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
-
-    if (picked != null && mounted) {
-      setState(() {
-        _selectedDateRange = 'Custom';
-        _salesStatsFuture = SalesStatsService().fetchSalesStats(
-          dateRange: 'Custom',
-          customStartDate: picked.start,
-          customEndDate: picked.end,
-        );
-      });
-    }
   }
-
   // ✅ FIX: correct CSV API — ListToCsvConverter().convert()
   Future<void> _exportCSV(List<Map<String, dynamic>> transactions) async {
     try {
@@ -1484,15 +1619,24 @@ class DateInputFormatter extends TextInputFormatter {
       TextEditingValue oldValue,
       TextEditingValue newValue) {
 
-    var text = newValue.text;
+    String text = newValue.text.replaceAll('/', '');
 
-    if (text.length == 2 || text.length == 5) {
-      text += '/';
+    if (text.length > 8) {
+      text = text.substring(0, 8);
+    }
+
+    String formatted = '';
+
+    for (int i = 0; i < text.length; i++) {
+      formatted += text[i];
+      if ((i == 1 || i == 3) && i != text.length - 1) {
+        formatted += '/';
+      }
     }
 
     return TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 }
